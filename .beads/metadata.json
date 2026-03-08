@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "mayday",
+  "project_id": "0bb7d235-9861-4a97-adf2-fb345884b1f1"
+}
