@@ -5,13 +5,22 @@
 
 Multi-agent incident response system coordinated by AI. Agents collaborate to triage, investigate, communicate, and remediate incidents under human supervision. Mayday owns the incident lifecycle; PagerDuty, Slack, and email are notification channels it uses, not upstream incident sources.
 
-- Status: architecture phase only — implementation begins in Phase 3 (after Phases 0-2 complete)
-- Beads epic: mayday-bel
-- Depends on: sitrep-5yh completion (Phase 2 SitRep implementation)
+- Status: Phase 3 implemented — all agents, coordinator, CLI, and 8 scenario fixtures complete
+- Beads epic: opensrm-m50 (centralized in opensrm repo; supersedes mayday-bel)
 - Demo milestone: Demo 3 "The Full Chain" — SitRep correlation verdicts feed Mayday pipeline, verdict lineage chain complete
-- Accept criteria: `mayday replay --scenario scenarios/synthetic/cascading-failure.yaml` produces expected verdicts with full lineage
+- Accept criteria: `mayday replay --scenario scenarios/synthetic/cascading-failure.yaml --no-model` produces 5 verdicts with full lineage, final state RESOLVED
+- Design spec: `opensrm/docs/superpowers/specs/2026-03-19-phase-3-mayday-implementation-design.md`
 - License: Apache 2.0
 - Contributing: see CONTRIBUTING.md
+
+## Build Commands
+
+- **Install verdict library (prerequisite):** `pip install -e ../verdicts/lib/python`
+- **Run tests:** `uv run --extra dev pytest tests/ -v`
+- **Run single test file:** `uv run --extra dev pytest tests/test_types.py -v`
+- **Run CLI:** `uv run --extra dev mayday serve | status | replay`
+- **Replay scenario:** `uv run --extra dev mayday replay --scenario scenarios/synthetic/cascading-failure.yaml --no-model`
+- **TDD workflow:** write failing test → implement → `uv run --extra dev pytest` verify pass → commit
 <!-- END AUTO-MANAGED -->
 
 <!-- AUTO-MANAGED: architecture -->
@@ -70,9 +79,21 @@ Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
 - Unknown condition names fail at startup — no runtime eval of arbitrary expressions
 - Cooldown and blast radius checks built into the registry
 
+**Autonomy reduction (first-class concept):**
+- When an AI agent's model update causes a quality breach, the remediation agent (or triage agent in critical cases) can request the Arbiter to reduce that agent's autonomy
+- `reduce_autonomy` is a built-in safe action in the registry, targeting the Arbiter's governance API
+- Unlike other safe actions (which target infrastructure), this targets another ecosystem component
+- The Arbiter's one-way safety ratchet means reduction always succeeds; restoration requires a separate human action
+- Trigger condition in triage: change_candidate is `agent_model_update` AND severity <= P2
+
+**Approval ratchet:**
+- The model can escalate approval requirements (request human sign-off) but never downgrade them
+- If a safe action's default is `requires_approval=True`, the model cannot override it to False
+- Same principle as the Arbiter's autonomy ratchet — one-way safety mechanisms
+
 **Crash recovery:**
-- `IncidentContext` serialised to SQLite after each agent step
-- Coordinator resumes from last persisted step on restart
+- `IncidentContext` serialised to SQLite after each pipeline step
+- Coordinator resumes from `last_completed_step_index` (int, not AgentRole — disambiguates parallel steps)
 - Testable with mock agents (no model required)
 
 **Post-incident learning loop:**
