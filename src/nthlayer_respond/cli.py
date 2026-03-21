@@ -1,4 +1,4 @@
-# src/mayday/cli.py
+# src/nthlayer_respond/cli.py
 """Mayday CLI — replay, status, approve/reject, serve."""
 from __future__ import annotations
 
@@ -12,20 +12,20 @@ from typing import Any
 
 import structlog
 import yaml
-from verdict import MemoryStore
+from nthlayer_learn import MemoryStore
 
 logger = structlog.get_logger(__name__)
 
-from mayday.agents.communication import CommunicationAgent
-from mayday.agents.investigation import InvestigationAgent
-from mayday.agents.remediation import RemediationAgent
-from mayday.agents.triage import TriageAgent
-from mayday.config import MaydayConfig, load_config
-from mayday.context_store import SQLiteContextStore
-from mayday.coordinator import Coordinator
-from mayday.safe_actions.actions import register_builtin_actions
-from mayday.safe_actions.registry import SafeActionRegistry
-from mayday.types import AgentRole, IncidentContext, IncidentState
+from nthlayer_respond.agents.communication import CommunicationAgent
+from nthlayer_respond.agents.investigation import InvestigationAgent
+from nthlayer_respond.agents.remediation import RemediationAgent
+from nthlayer_respond.agents.triage import TriageAgent
+from nthlayer_respond.config import MaydayConfig, load_config
+from nthlayer_respond.context_store import SQLiteContextStore
+from nthlayer_respond.coordinator import Coordinator
+from nthlayer_respond.safe_actions.actions import register_builtin_actions
+from nthlayer_respond.safe_actions.registry import SafeActionRegistry
+from nthlayer_respond.types import AgentRole, IncidentContext, IncidentState
 
 
 # ------------------------------------------------------------------ #
@@ -36,7 +36,7 @@ from mayday.types import AgentRole, IncidentContext, IncidentState
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
-        prog="mayday",
+        prog="nthlayer-respond",
         description="Mayday -- multi-agent incident response",
     )
     sub = parser.add_subparsers(dest="command")
@@ -260,7 +260,7 @@ async def replay_command(
         # In --no-model mode, create mock SitRep correlation verdicts
         trigger_verdict_ids: list[str] = []
         if no_model:
-            from verdict import create as verdict_create
+            from nthlayer_learn import create as verdict_create
 
             v = verdict_create(
                 subject={
@@ -280,7 +280,7 @@ async def replay_command(
         else:
             # Real SitRep integration
             try:
-                from sitrep.replay import load_sitrep_scenario  # type: ignore[import]
+                from nthlayer_correlate.replay import load_sitrep_scenario  # type: ignore[import]
 
                 # Would run SitRep replay here
                 print(

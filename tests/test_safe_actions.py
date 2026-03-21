@@ -1,9 +1,9 @@
 # tests/test_safe_actions.py
 """Tests for safe action registry."""
 import pytest
-from mayday.safe_actions.registry import SafeAction, SafeActionRegistry
-from mayday.safe_actions.actions import register_builtin_actions
-from mayday.types import IncidentContext, IncidentState
+from nthlayer_respond.safe_actions.registry import SafeAction, SafeActionRegistry
+from nthlayer_respond.safe_actions.actions import register_builtin_actions
+from nthlayer_respond.types import IncidentContext, IncidentState
 
 
 def make_context():

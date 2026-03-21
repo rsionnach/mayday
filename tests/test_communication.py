@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import pytest
-from verdict import MemoryStore
+from nthlayer_learn import MemoryStore
 
-from mayday.agents.communication import CommunicationAgent
-from mayday.types import (
+from nthlayer_respond.agents.communication import CommunicationAgent
+from nthlayer_respond.types import (
     AgentRole,
     CommunicationResult,
     CommunicationUpdate,

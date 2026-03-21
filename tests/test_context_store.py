@@ -1,8 +1,8 @@
 """Tests for context store."""
 import json
 import pytest
-from mayday.context_store import SQLiteContextStore
-from mayday.types import IncidentContext, IncidentState, TriageResult
+from nthlayer_respond.context_store import SQLiteContextStore
+from nthlayer_respond.types import IncidentContext, IncidentState, TriageResult
 
 
 @pytest.fixture

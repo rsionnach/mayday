@@ -1,4 +1,4 @@
-# src/mayday/safe_actions/registry.py
+# src/nthlayer_respond/safe_actions/registry.py
 """Safe action registry — closed callable registry with cooldown persistence."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
-from mayday.types import IncidentContext
+from nthlayer_respond.types import IncidentContext
 
 logger = logging.getLogger(__name__)
 

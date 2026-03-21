@@ -1,4 +1,4 @@
-# src/mayday/agents/remediation.py
+# src/nthlayer_respond/agents/remediation.py
 """RemediationAgent — safe action execution with approval ratchet."""
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import json
 import logging
 from typing import Any
 
-from mayday.agents.base import AgentBase
-from mayday.safe_actions.registry import SafeActionRegistry
-from mayday.types import (
+from nthlayer_respond.agents.base import AgentBase
+from nthlayer_respond.safe_actions.registry import SafeActionRegistry
+from nthlayer_respond.types import (
     AgentRole,
     IncidentContext,
     RemediationResult,

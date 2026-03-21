@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from verdict import MemoryStore
+from nthlayer_learn import MemoryStore
 
-from mayday.types import IncidentContext, IncidentState
+from nthlayer_respond.types import IncidentContext, IncidentState
 
 
 @pytest.fixture

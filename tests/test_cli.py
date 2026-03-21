@@ -2,7 +2,7 @@
 """Tests for CLI argument parsing."""
 from __future__ import annotations
 
-from mayday.cli import build_parser
+from nthlayer_respond.cli import build_parser
 
 
 def test_parser_serve():

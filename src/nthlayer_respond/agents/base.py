@@ -1,4 +1,4 @@
-# src/mayday/agents/base.py
+# src/nthlayer_respond/agents/base.py
 """AgentBase ABC — ZFC boundary: transport here, judgment in subclasses."""
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ import urllib.error
 from abc import ABC, abstractmethod
 from typing import Any
 
-from verdict import create as verdict_create, Verdict
+from nthlayer_learn import create as verdict_create, Verdict
 
-from mayday.types import AgentRole, IncidentContext
+from nthlayer_respond.types import AgentRole, IncidentContext
 
 
 class AgentBase(ABC):

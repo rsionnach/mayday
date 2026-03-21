@@ -1,4 +1,4 @@
-# Mayday
+# nthlayer-respond
 
 <!-- AUTO-MANAGED: project-description -->
 ## Project Description
@@ -8,7 +8,7 @@ Multi-agent incident response system coordinated by AI. Agents collaborate to tr
 - Status: Phase 3 implemented — all agents, coordinator, CLI, and 8 scenario fixtures complete
 - Beads epic: opensrm-m50 (centralized in opensrm repo; supersedes mayday-bel)
 - Demo milestone: Demo 3 "The Full Chain" — SitRep correlation verdicts feed Mayday pipeline, verdict lineage chain complete
-- Accept criteria: `mayday replay --scenario scenarios/synthetic/cascading-failure.yaml --no-model` produces 5 verdicts with full lineage, final state RESOLVED
+- Accept criteria: `nthlayer-respond replay --scenario scenarios/synthetic/cascading-failure.yaml --no-model` produces 5 verdicts with full lineage, final state RESOLVED
 - Design spec: `opensrm/docs/superpowers/specs/2026-03-19-phase-3-mayday-implementation-design.md`
 - License: Apache 2.0
 - Contributing: see CONTRIBUTING.md
@@ -18,10 +18,10 @@ Multi-agent incident response system coordinated by AI. Agents collaborate to tr
 - **Install dependencies (including verdict library):** `uv sync --extra dev`
 - **Run tests:** `uv run --extra dev pytest tests/ -v`
 - **Run single test file:** `uv run --extra dev pytest tests/test_types.py -v`
-- **Run CLI:** `uv run --extra dev mayday <serve|status|replay|approve|reject|resume>`
-- **Replay scenario:** `uv run --extra dev mayday replay --scenario scenarios/synthetic/cascading-failure.yaml --no-model`
-- **Resume crashed incident:** `uv run --extra dev mayday resume <incident_id>`
-- **Approve/reject remediation:** `uv run --extra dev mayday approve <incident_id>` / `mayday reject <incident_id> --reason <reason>`
+- **Run CLI:** `uv run --extra dev nthlayer-respond <serve|status|replay|approve|reject|resume>`
+- **Replay scenario:** `uv run --extra dev nthlayer-respond replay --scenario scenarios/synthetic/cascading-failure.yaml --no-model`
+- **Resume crashed incident:** `uv run --extra dev nthlayer-respond resume <incident_id>`
+- **Approve/reject remediation:** `uv run --extra dev nthlayer-respond approve <incident_id>` / `nthlayer-respond reject <incident_id> --reason <reason>`
 - **TDD workflow:** write failing test → implement → `uv run --extra dev pytest` verify pass → commit
 <!-- END AUTO-MANAGED -->
 
@@ -30,7 +30,7 @@ Multi-agent incident response system coordinated by AI. Agents collaborate to tr
 
 Follows [Zero Framework Cognition](ZFC.md): the orchestrator is pure transport; agents provide judgment.
 
-**Source layout (`src/mayday/`):**
+**Source layout (`src/nthlayer_respond/`):**
 - `cli.py` — 6 subcommands: serve, status, replay, approve, reject, resume
 - `coordinator.py` — deterministic state machine; sequences agent pipeline; persists IncidentContext to SQLite
 - `types.py` — IncidentContext, TriageResult, InvestigationResult, RemediationResult, CommunicationResult, Hypothesis
@@ -185,10 +185,10 @@ verdict:
 - **NthLayer** — topology exports, deployment gate status; consumes Mayday post-incident findings
 
 **OpenSRM ecosystem** (each component works standalone, composes via shared manifests + OTel):
-- [OpenSRM](https://github.com/rsionnach/opensrm) — service reliability specification
-- [Verdict](../verdicts/) — data primitive; Mayday consumes SitRep's verdicts and produces its own per agent role
-- [Arbiter](https://github.com/rsionnach/arbiter) — quality measurement and AI agent governance
-- [NthLayer](https://github.com/rsionnach/nthlayer) — generate monitoring infrastructure from manifests
-- [SitRep](https://github.com/rsionnach/sitrep) — situational awareness through signal correlation
-- Mayday (this repo) — multi-agent incident response
+- [nthlayer-spec](../nthlayer-spec/) — service reliability specification
+- [nthlayer-learn](../verdicts/) — data primitive; Mayday consumes SitRep's verdicts and produces its own per agent role
+- [nthlayer-measure](../arbiter/) — quality measurement and AI agent governance
+- [nthlayer](../nthlayer/) — generate monitoring infrastructure from manifests
+- [nthlayer-correlate](../sitrep/) — situational awareness through signal correlation
+- nthlayer-respond (this repo) — multi-agent incident response
 <!-- END AUTO-MANAGED -->

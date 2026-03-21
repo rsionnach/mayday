@@ -1,4 +1,4 @@
-# src/mayday/types.py
+# src/nthlayer_respond/types.py
 """Core data types for Mayday."""
 from __future__ import annotations
 

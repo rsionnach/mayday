@@ -1,4 +1,4 @@
-# src/mayday/config.py
+# src/nthlayer_respond/config.py
 """Mayday configuration."""
 from __future__ import annotations
 

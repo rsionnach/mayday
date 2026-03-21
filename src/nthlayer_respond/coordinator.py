@@ -1,4 +1,4 @@
-# src/mayday/coordinator.py
+# src/nthlayer_respond/coordinator.py
 """Coordinator state machine — pure transport, no judgment.
 
 Sequences the agent pipeline, persists context after each step,
@@ -12,7 +12,7 @@ from typing import Any
 
 import structlog
 
-from mayday.types import (
+from nthlayer_respond.types import (
     AgentRole,
     IncidentContext,
     IncidentState,
@@ -118,7 +118,7 @@ class Coordinator:
             remediation.execution_result = exec_result.get("detail", "")
 
             # Emit confirmation verdict
-            from verdict import create as verdict_create
+            from nthlayer_learn import create as verdict_create
 
             v = verdict_create(
                 subject={
@@ -143,7 +143,7 @@ class Coordinator:
         except Exception as exc:  # noqa: BLE001
             logger.error("approve_execution_failed", error=str(exc))
 
-            from verdict import create as verdict_create
+            from nthlayer_learn import create as verdict_create
 
             v = verdict_create(
                 subject={

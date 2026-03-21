@@ -1,6 +1,6 @@
 # tests/test_types.py
 """Tests for core Mayday types."""
-from mayday.types import (
+from nthlayer_respond.types import (
     AgentRole,
     CommunicationResult,
     CommunicationUpdate,

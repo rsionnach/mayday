@@ -3,10 +3,10 @@
 import json
 import pytest
 from unittest.mock import AsyncMock, patch
-from verdict import MemoryStore, create as verdict_create
+from nthlayer_learn import MemoryStore, create as verdict_create
 
-from mayday.agents.triage import TriageAgent
-from mayday.types import AgentRole, IncidentContext, IncidentState
+from nthlayer_respond.agents.triage import TriageAgent
+from nthlayer_respond.types import AgentRole, IncidentContext, IncidentState
 
 
 @pytest.fixture
@@ -108,7 +108,7 @@ def test_role_and_timeout(triage_agent):
 
 
 def test_apply_result_sets_triage(triage_agent, sitrep_context):
-    from mayday.types import TriageResult
+    from nthlayer_respond.types import TriageResult
     result = TriageResult(
         severity=2,
         blast_radius=["payment-api"],
@@ -177,7 +177,7 @@ async def test_post_execute_triggers_autonomy_reduction(triage_agent, verdict_st
         trigger_verdict_ids=[v.id],
         topology={},
     )
-    from mayday.types import TriageResult
+    from nthlayer_respond.types import TriageResult
     result = TriageResult(
         severity=1,
         blast_radius=[],
@@ -209,7 +209,7 @@ async def test_post_execute_no_autonomy_reduction_high_severity(triage_agent, ve
         trigger_verdict_ids=[v.id],
         topology={},
     )
-    from mayday.types import TriageResult
+    from nthlayer_respond.types import TriageResult
     result = TriageResult(
         severity=3,
         blast_radius=[],
@@ -239,7 +239,7 @@ async def test_post_execute_no_autonomy_reduction_no_tag(triage_agent, verdict_s
         trigger_verdict_ids=[v.id],
         topology={},
     )
-    from mayday.types import TriageResult
+    from nthlayer_respond.types import TriageResult
     result = TriageResult(
         severity=1,
         blast_radius=[],

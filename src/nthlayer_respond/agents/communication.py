@@ -1,11 +1,11 @@
-# src/mayday/agents/communication.py
+# src/nthlayer_respond/agents/communication.py
 """CommunicationAgent — two-phase incident communication drafting."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from mayday.agents.base import AgentBase
-from mayday.types import (
+from nthlayer_respond.agents.base import AgentBase
+from nthlayer_respond.types import (
     AgentRole,
     CommunicationResult,
     CommunicationUpdate,

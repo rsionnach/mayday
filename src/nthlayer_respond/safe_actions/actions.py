@@ -1,4 +1,4 @@
-# src/mayday/safe_actions/actions.py
+# src/nthlayer_respond/safe_actions/actions.py
 """Built-in safe actions (Tier 1 stubs).
 
 All handlers log intent and return simulated success.  Real integrations
@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 
-from mayday.safe_actions.registry import SafeAction, SafeActionRegistry
-from mayday.types import IncidentContext
+from nthlayer_respond.safe_actions.registry import SafeAction, SafeActionRegistry
+from nthlayer_respond.types import IncidentContext
 
 logger = logging.getLogger(__name__)
 

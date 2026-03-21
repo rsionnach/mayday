@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from verdict import MemoryStore
+from nthlayer_learn import MemoryStore
 
-from mayday.agents.remediation import RemediationAgent
-from mayday.safe_actions.registry import SafeAction, SafeActionRegistry
-from mayday.safe_actions.actions import register_builtin_actions
-from mayday.types import (
+from nthlayer_respond.agents.remediation import RemediationAgent
+from nthlayer_respond.safe_actions.registry import SafeAction, SafeActionRegistry
+from nthlayer_respond.safe_actions.actions import register_builtin_actions
+from nthlayer_respond.types import (
     AgentRole,
     Hypothesis,
     IncidentContext,
@@ -231,7 +231,7 @@ def test_parse_response_hallucinated_action_logs_warning(agent, context):
         "reasoning": "Wipe it.",
     })
     import logging
-    with patch.object(logging.getLogger("mayday.agents.remediation"), "warning") as mock_warn:
+    with patch.object(logging.getLogger("nthlayer_respond.agents.remediation"), "warning") as mock_warn:
         result = agent.parse_response(response, context)
     mock_warn.assert_called_once()
     assert result.proposed_action is None

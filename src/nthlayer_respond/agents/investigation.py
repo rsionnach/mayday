@@ -1,12 +1,12 @@
-# src/mayday/agents/investigation.py
+# src/nthlayer_respond/agents/investigation.py
 """InvestigationAgent — hypothesis generation and root cause declaration."""
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from mayday.agents.base import AgentBase
-from mayday.types import (
+from nthlayer_respond.agents.base import AgentBase
+from nthlayer_respond.types import (
     AgentRole,
     Hypothesis,
     IncidentContext,

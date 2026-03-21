@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from mayday.cli import replay_command
+from nthlayer_respond.cli import replay_command
 
 
 # All replay tests use --no-model mode (mock responses from YAML).

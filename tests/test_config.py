@@ -1,7 +1,7 @@
 # tests/test_config.py
 """Tests for Mayday configuration."""
 import textwrap
-from mayday.config import MaydayConfig, load_config
+from nthlayer_respond.config import MaydayConfig, load_config
 
 
 def test_default_config():

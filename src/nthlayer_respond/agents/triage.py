@@ -1,12 +1,12 @@
-# src/mayday/agents/triage.py
+# src/nthlayer_respond/agents/triage.py
 """TriageAgent — first concrete agent in the Mayday pipeline."""
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from mayday.agents.base import AgentBase
-from mayday.types import AgentRole, IncidentContext, TriageResult
+from nthlayer_respond.agents.base import AgentBase
+from nthlayer_respond.types import AgentRole, IncidentContext, TriageResult
 
 
 class TriageAgent(AgentBase):

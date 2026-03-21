@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from verdict import MemoryStore, create as verdict_create
+from nthlayer_learn import MemoryStore, create as verdict_create
 
-from mayday.coordinator import Coordinator, PIPELINE
-from mayday.context_store import SQLiteContextStore
-from mayday.types import (
+from nthlayer_respond.coordinator import Coordinator, PIPELINE
+from nthlayer_respond.context_store import SQLiteContextStore
+from nthlayer_respond.types import (
     AgentRole,
     CommunicationResult,
     Hypothesis,
@@ -594,7 +594,7 @@ async def test_resume_missing_incident_raises(make_coordinator):
 
 async def test_next_step_logic():
     """_next_step returns correct next step index."""
-    from mayday.coordinator import Coordinator
+    from nthlayer_respond.coordinator import Coordinator
 
     ctx = IncidentContext(
         id="test",

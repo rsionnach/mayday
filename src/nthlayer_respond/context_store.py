@@ -6,7 +6,7 @@ import json
 import sqlite3
 from typing import Protocol
 
-from mayday.types import (
+from nthlayer_respond.types import (
     CommunicationResult,
     CommunicationUpdate,
     Hypothesis,
