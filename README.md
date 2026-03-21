@@ -1,13 +1,13 @@
-# Mayday
+# nthlayer-respond
 
 **Multi-agent incident response coordinated by AI.**
 
-[![Status: Architecture](https://img.shields.io/badge/Status-Architecture-blue?style=for-the-badge)](https://github.com/rsionnach/mayday)
+[![Status: Architecture](https://img.shields.io/badge/Status-Architecture-blue?style=for-the-badge)](https://github.com/rsionnach/nthlayer-respond)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green?style=for-the-badge)](LICENSE)
 
 Incident response involves a lot of repetitive work: classifying severity, identifying blast radius, correlating changes with symptoms, drafting stakeholder updates, deciding whether to rollback, and communicating resolution. Most of this work follows patterns that AI agents can handle reliably, freeing human responders for the judgment calls that actually need them (novel failure modes, business-critical tradeoffs, cross-team coordination).
 
-Mayday is an incident response system where specialised AI agents collaborate to triage, investigate, communicate, and remediate under human supervision. Each agent has a clear domain, defined decision authority, and its own judgment SLO that measures how often humans need to correct its work. Mayday owns the incident lifecycle, and uses tools like PagerDuty, Slack, and email as notification channels rather than treating them as upstream incident sources.
+nthlayer-respond is an incident response system where specialised AI agents collaborate to triage, investigate, communicate, and remediate under human supervision. Each agent has a clear domain, defined decision authority, and its own judgment SLO that measures how often humans need to correct its work. nthlayer-respond owns the incident lifecycle, and uses tools like PagerDuty, Slack, and email as notification channels rather than treating them as upstream incident sources.
 
 This project is in the architecture phase. The design is documented below, and implementation has not yet started.
 
@@ -16,13 +16,13 @@ This project is in the architecture phase. The design is documented below, and i
 ## Alert Flow
 
 ```
-Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
+Alert Source (nthlayer-measure quality breach / Prometheus alert / any webhook)
        │
        ▼
-   SitRep Snapshot (correlated context)
+   nthlayer-correlate Snapshot (correlated context)
        │
        ▼
-   Mayday Orchestrator (creates incident context)
+   nthlayer-respond Orchestrator (creates incident context)
        │
        ▼
    Agent Pipeline (triage → investigate + communicate → remediate)
@@ -31,13 +31,13 @@ Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
    Notification Channels (PagerDuty / Slack / email / status page)
 ```
 
-Mayday receives alerts from any source (the Arbiter's quality breach signals, Prometheus alerting rules, or any webhook), requests a correlated snapshot from SitRep for context, then coordinates the response through its agent pipeline. PagerDuty, Slack, email, and status pages are notification channels that Mayday uses to reach humans when it needs approval or escalation.
+nthlayer-respond receives alerts from any source (nthlayer-measure's quality breach signals, Prometheus alerting rules, or any webhook), requests a correlated snapshot from nthlayer-correlate for context, then coordinates the response through its agent pipeline. PagerDuty, Slack, email, and status pages are notification channels that nthlayer-respond uses to reach humans when it needs approval or escalation.
 
 ---
 
 ## Orchestration Model
 
-Mayday uses a purpose-built orchestrator (not a general-purpose agent framework) that sequences agents based on the incident lifecycle. The orchestrator itself is not an agent. It's a deterministic state machine that sequences agent execution (transport). Agents reason within their step (judgment). This follows [Zero Framework Cognition](ZFC.md).
+nthlayer-respond uses a purpose-built orchestrator (not a general-purpose agent framework) that sequences agents based on the incident lifecycle. The orchestrator itself is not an agent. It's a deterministic state machine that sequences agent execution (transport). Agents reason within their step (judgment). This follows [Zero Framework Cognition](ZFC.md).
 
 ```
 ┌──────────────┐
@@ -64,7 +64,7 @@ Triage runs first, then Investigation and Communication run in parallel. When In
 
 ## Incident Context
 
-All Mayday agents read from and write to a shared incident context object that accumulates findings throughout the incident lifecycle. This is the single accumulating record of what is known about the incident:
+All nthlayer-respond agents read from and write to a shared incident context object that accumulates findings throughout the incident lifecycle. This is the single accumulating record of what is known about the incident:
 
 ```yaml
 incident_context:
@@ -123,7 +123,7 @@ Classifies severity based on blast radius and SLO impact from OpenSRM manifests.
 
 ### Investigation Agent
 
-Generates hypotheses from SitRep snapshots, gathers evidence from metrics, logs, and change history, and ranks root causes by confidence. Adapts investigation strategy based on what evidence reveals, following the data rather than a fixed checklist.
+Generates hypotheses from nthlayer-correlate snapshots, gathers evidence from metrics, logs, and change history, and ranks root causes by confidence. Adapts investigation strategy based on what evidence reveals, following the data rather than a fixed checklist.
 
 **Can:** Form and rank hypotheses. Declare root cause when confidence exceeds threshold.
 **Cannot:** Execute any remediation.
@@ -151,18 +151,18 @@ Selects and executes fixes based on investigation findings, manifest-defined saf
 
 Agents never take destructive action without human approval unless the action is pre-approved as safe in the OpenSRM manifest. The manifest defines which actions are considered safe for automated execution (like rolling back to a known-good version or scaling up), and everything else requires a human to approve.
 
-Humans make severity calls, approve novel remediations, and override agent decisions. Every agent decision emits OTel telemetry, and every human override feeds back into that agent's judgment SLO. The [Arbiter's](https://github.com/rsionnach/arbiter) governance layer monitors these judgment SLOs and adjusts agent autonomy accordingly, using the one-way safety ratchet (the Arbiter can reduce agent autonomy but cannot increase it without human approval).
+Humans make severity calls, approve novel remediations, and override agent decisions. Every agent decision emits OTel telemetry, and every human override feeds back into that agent's judgment SLO. [nthlayer-measure's](https://github.com/rsionnach/nthlayer-measure) governance layer monitors these judgment SLOs and adjusts agent autonomy accordingly, using the one-way safety ratchet (nthlayer-measure can reduce agent autonomy but cannot increase it without human approval).
 
 ---
 
 ## Post-Incident Learning
 
-After resolution, Mayday produces structured findings that flow back into the ecosystem rather than sitting in a document that nobody reads again:
+After resolution, nthlayer-respond produces structured findings that flow back into the ecosystem rather than sitting in a document that nobody reads again:
 
 - **Manifest updates:** Findings map to specific OpenSRM manifest changes (tighter SLO targets that were too loose, new dependency declarations that were missing, new safe action definitions for remediation)
 - **Rule refinements:** Quality patterns inform NthLayer's generated alerting rules (alerts that should have fired earlier or didn't fire at all)
-- **Threshold revisions:** The Arbiter's historical data informs whether judgment SLO thresholds need adjustment
-- **Correlation improvements:** SitRep's accuracy on past incidents calibrates its future correlations
+- **Threshold revisions:** nthlayer-measure's historical data informs whether judgment SLO thresholds need adjustment
+- **Correlation improvements:** nthlayer-correlate's accuracy on past incidents calibrates its future correlations
 
 This closes the learning loop so the system improves after every incident rather than just documenting what happened.
 
@@ -170,7 +170,7 @@ This closes the learning loop so the system improves after every incident rather
 
 ## OpenSRM Integration
 
-Mayday reads from [OpenSRM](https://github.com/rsionnach/opensrm) manifests extensively during incident response:
+nthlayer-respond reads from [OpenSRM](https://github.com/rsionnach/opensrm) manifests extensively during incident response:
 
 - **Severity tiers** and SLO targets determine how urgently a degradation should be treated
 - **Safe action definitions** in the manifest specify which remediation actions the Remediation Agent can execute without human approval
@@ -181,17 +181,17 @@ Mayday reads from [OpenSRM](https://github.com/rsionnach/opensrm) manifests exte
 
 ## Ecosystem Integration
 
-Mayday consumes from and produces signals for the other ecosystem components:
+nthlayer-respond consumes from and produces signals for the other ecosystem components:
 
-- **SitRep** provides correlated snapshots as the starting context for every incident, so Mayday's agents begin with a correlated picture rather than raw signals
-- **The Arbiter** provides quality scores that inform whether AI agents in the response are producing reliable diagnostics, and its governance layer adjusts Mayday's agent autonomy based on measured performance
-- **NthLayer** provides topology exports and deployment gate status, and consumes Mayday's post-incident findings to refine generated alerting rules
+- **nthlayer-correlate** provides correlated snapshots as the starting context for every incident, so nthlayer-respond's agents begin with a correlated picture rather than raw signals
+- **nthlayer-measure** provides quality scores that inform whether AI agents in the response are producing reliable diagnostics, and its governance layer adjusts nthlayer-respond's agent autonomy based on measured performance
+- **NthLayer** provides topology exports and deployment gate status, and consumes nthlayer-respond's post-incident findings to refine generated alerting rules
 
 ---
 
 ## OpenSRM Ecosystem
 
-Mayday is one component in the OpenSRM ecosystem. Each component solves a complete problem independently, and they compose when used together through shared OpenSRM manifests and OTel telemetry conventions.
+nthlayer-respond is one component in the OpenSRM ecosystem. Each component solves a complete problem independently, and they compose when used together through shared OpenSRM manifests and OTel telemetry conventions.
 
 ```
                         ┌─────────────────────────┐
@@ -203,7 +203,7 @@ Mayday is one component in the OpenSRM ecosystem. Each component solves a comple
                ┌─────────────┬──────┴──────┬─────────────┐
                ▼             ▼             ▼             ▼
          ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
-         │ Arbiter  │ │ NthLayer │ │  SitRep  │ │>>MAYDAY< │
+         │ MEASURE  │ │ NthLayer │ │CORRELATE │ │>RESPOND< │
          │          │ │          │ │          │ │          │
          │ quality  │ │ generate │ │correlate │ │ incident │
          │+govern   │ │ monitoring│ │ signals  │ │ response │
@@ -226,40 +226,40 @@ Mayday is one component in the OpenSRM ecosystem. Each component solves a comple
                      └──────────────────────────┘
 
               Learning loop (post-incident):
-              Mayday findings → manifest updates
-              → NthLayer regenerates → Arbiter
-              refines → SitRep improves → OpenSRM
+              nthlayer-respond findings → manifest updates
+              → NthLayer regenerates → nthlayer-measure
+              refines → nthlayer-correlate improves → OpenSRM
 ```
 
-**How Mayday fits in:**
+**How nthlayer-respond fits in:**
 
-- Mayday consumes **SitRep's correlation verdicts** (with confidence scores and lineage) as starting context for every incident, so agents begin with a correlated picture rather than raw signals
-- Each Mayday agent emits its own **verdicts** (triage, investigation, communication, remediation) linked via lineage to the SitRep verdicts that informed them — one human override at any point calibrates every component upstream
-- The **Arbiter** monitors Mayday's agent judgment SLOs and adjusts autonomy via the one-way safety ratchet
+- nthlayer-respond consumes **nthlayer-correlate's correlation verdicts** (with confidence scores and lineage) as starting context for every incident, so agents begin with a correlated picture rather than raw signals
+- Each nthlayer-respond agent emits its own **verdicts** (triage, investigation, communication, remediation) linked via lineage to the nthlayer-correlate verdicts that informed them — one human override at any point calibrates every component upstream
+- **nthlayer-measure** monitors nthlayer-respond's agent judgment SLOs and adjusts autonomy via the one-way safety ratchet
 - **NthLayer** provides topology exports and deployment gate status, and consumes post-incident findings as rule refinements
 
-Each component works alone. Someone who just needs incident response coordination adopts Mayday without needing NthLayer, the Arbiter, or SitRep (though SitRep's correlated verdicts significantly enrich Mayday's context).
+Each component works alone. Someone who just needs incident response coordination adopts nthlayer-respond without needing NthLayer, nthlayer-measure, or nthlayer-correlate (though nthlayer-correlate's correlated verdicts significantly enrich nthlayer-respond's context).
 
 | Component | What it does | Link |
 |-----------|-------------|------|
-| **OpenSRM** | Specification for declaring service reliability requirements | [opensrm](https://github.com/rsionnach/opensrm) |
-| **Verdict** | Data primitive for recording AI judgments and measuring correctness | [verdicts](https://github.com/rsionnach/verdicts) |
-| **Arbiter** | Quality measurement and governance for AI agents | [arbiter](https://github.com/rsionnach/arbiter) |
+| **OpenSRM** | Specification for declaring service reliability requirements | [OpenSRM](https://github.com/rsionnach/opensrm) |
+| **nthlayer-learn** | Data primitive for recording AI judgments and measuring correctness | [nthlayer-learn](https://github.com/rsionnach/nthlayer-learn) |
+| **nthlayer-measure** | Quality measurement and governance for AI agents | [nthlayer-measure](https://github.com/rsionnach/nthlayer-measure) |
 | **NthLayer** | Generate monitoring infrastructure from manifests | [nthlayer](https://github.com/rsionnach/nthlayer) |
-| **SitRep** | Situational awareness through signal correlation | [sitrep](https://github.com/rsionnach/sitrep) |
-| **Mayday** | Multi-agent incident response (this repo) | [mayday](https://github.com/rsionnach/mayday) |
+| **nthlayer-correlate** | Situational awareness through signal correlation | [nthlayer-correlate](https://github.com/rsionnach/nthlayer-correlate) |
+| **nthlayer-respond** | Multi-agent incident response (this repo) | [nthlayer-respond](https://github.com/rsionnach/nthlayer-respond) |
 
 ---
 
 ## Architecture
 
-Mayday follows [Zero Framework Cognition](ZFC.md). The orchestrator is pure transport: it receives the incident trigger, creates the shared context, sequences agent execution through the pipeline, and routes messages. The agents provide judgment: triaging severity, forming hypotheses, drafting communications, and assessing remediation risk. If the model is unavailable, the orchestrator still creates the incident context and routes it to human operators, degrading to "no AI opinion" rather than "no incident response."
+nthlayer-respond follows [Zero Framework Cognition](ZFC.md). The orchestrator is pure transport: it receives the incident trigger, creates the shared context, sequences agent execution through the pipeline, and routes messages. The agents provide judgment: triaging severity, forming hypotheses, drafting communications, and assessing remediation risk. If the model is unavailable, the orchestrator still creates the incident context and routes it to human operators, degrading to "no AI opinion" rather than "no incident response."
 
 ---
 
 ## Status
 
-Mayday is in the architecture phase. The design documented here reflects the target architecture, and implementation has not yet started. The orchestration model and agent role definitions have been designed in detail (see the [Mayday architecture](https://github.com/rsionnach/opensrm/blob/main/components/mayday/README.md) in the OpenSRM repo).
+nthlayer-respond is in the architecture phase. The design documented here reflects the target architecture, and implementation has not yet started. The orchestration model and agent role definitions have been designed in detail (see the [nthlayer-respond architecture](https://github.com/rsionnach/opensrm/blob/main/components/mayday/README.md) in the OpenSRM repo).
 
 ---
 
