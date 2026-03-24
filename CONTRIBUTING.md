@@ -1,6 +1,6 @@
-# Contributing to Mayday
+# Contributing to nthlayer-respond
 
-Thanks for your interest in contributing to Mayday. This project is part of the [OpenSRM ecosystem](https://github.com/rsionnach/opensrm), and contributions of all kinds are welcome, whether that's bug reports, documentation improvements, feature proposals, or code.
+Thanks for your interest in contributing to nthlayer-respond. This project is part of the [OpenSRM ecosystem](https://github.com/rsionnach/opensrm), and contributions of all kinds are welcome, whether that's bug reports, documentation improvements, feature proposals, or code.
 
 ## Getting Started
 
@@ -12,9 +12,9 @@ Thanks for your interest in contributing to Mayday. This project is part of the 
 
 ## Shared Conventions
 
-Mayday follows the [OpenSRM specification](https://github.com/rsionnach/opensrm) for manifest formats, semantic conventions, and telemetry standards. If your contribution touches how Mayday reads manifests, consumes snapshots, or emits telemetry, please review the spec first to ensure alignment.
+nthlayer-respond follows the [OpenSRM specification](https://github.com/rsionnach/opensrm) for manifest formats, semantic conventions, and telemetry standards. If your contribution touches how nthlayer-respond reads manifests, consumes snapshots, or emits telemetry, please review the spec first to ensure alignment.
 
-Mayday follows [Zero Framework Cognition](ZFC.md) as its core architectural principle. Transport (receiving alerts, sequencing agent execution, routing messages, persisting incident context) belongs in code. Judgment (triaging severity, forming hypotheses, assessing risk, drafting communications) belongs to the model. If you're unsure whether something is transport or judgment, check the ZFC document or open an issue to discuss.
+nthlayer-respond follows [Zero Framework Cognition](ZFC.md) as its core architectural principle. Transport (receiving alerts, sequencing agent execution, routing messages, persisting incident context) belongs in code. Judgment (triaging severity, forming hypotheses, assessing risk, drafting communications) belongs to the model. If you're unsure whether something is transport or judgment, check the ZFC document or open an issue to discuss.
 
 ## Reporting Issues
 

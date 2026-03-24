@@ -3,11 +3,11 @@
 <!-- AUTO-MANAGED: project-description -->
 ## Project Description
 
-Multi-agent incident response system coordinated by AI. Agents collaborate to triage, investigate, communicate, and remediate incidents under human supervision. Mayday owns the incident lifecycle; PagerDuty, Slack, and email are notification channels it uses, not upstream incident sources.
+Multi-agent incident response system coordinated by AI. Agents collaborate to triage, investigate, communicate, and remediate incidents under human supervision. nthlayer-respond owns the incident lifecycle; PagerDuty, Slack, and email are notification channels it uses, not upstream incident sources.
 
 - Status: Phase 3 implemented — all agents, coordinator, CLI, and 8 scenario fixtures complete
 - Beads epic: opensrm-m50 (centralized in opensrm repo; supersedes mayday-bel)
-- Demo milestone: Demo 3 "The Full Chain" — SitRep correlation verdicts feed Mayday pipeline, verdict lineage chain complete
+- Demo milestone: Demo 3 "The Full Chain" — nthlayer-correlate correlation verdicts feed nthlayer-respond pipeline, verdict lineage chain complete
 - Accept criteria: `nthlayer-respond replay --scenario scenarios/synthetic/cascading-failure.yaml --no-model` produces 5 verdicts with full lineage, final state RESOLVED
 - Design spec: `opensrm/docs/superpowers/specs/2026-03-19-phase-3-mayday-implementation-design.md`
 - License: Apache 2.0
@@ -70,9 +70,9 @@ Follows [Zero Framework Cognition](ZFC.md): the orchestrator is pure transport; 
 
 **Alert flow:**
 ```
-Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
-→ SitRep Snapshot (correlated context)
-→ Mayday Orchestrator (creates incident context)
+Alert Source (nthlayer-measure quality breach / Prometheus alert / any webhook)
+→ nthlayer-correlate Snapshot (correlated context)
+→ nthlayer-respond Orchestrator (creates incident context)
 → Agent Pipeline (triage → investigate + communicate → remediate)
 → Notification Channels (PagerDuty / Slack / email / status page)
 ```
@@ -81,14 +81,14 @@ Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
 <!-- AUTO-MANAGED: patterns -->
 ## Key Design Patterns
 
-**ZFC transport/judgment split for Mayday:**
+**ZFC transport/judgment split for nthlayer-respond:**
 - Transport (code): receiving alerts, sequencing agent execution, routing messages, persisting incident context
 - Judgment (model): triaging severity, forming hypotheses, assessing risk, drafting communications
 
 **Human-in-the-loop:**
 - Agents never take destructive action without human approval unless the action is pre-approved as safe in the OpenSRM manifest
 - Every human override feeds back into that agent's judgment SLO
-- Arbiter uses a one-way safety ratchet: can reduce agent autonomy but cannot increase it without human approval
+- nthlayer-measure uses a one-way safety ratchet: can reduce agent autonomy but cannot increase it without human approval
 
 **Safe action conditions — closed registry, not expression language:**
 - Each condition is a registered callable (named function)
@@ -96,16 +96,16 @@ Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
 - Cooldown and blast radius checks built into the registry
 
 **Autonomy reduction (first-class concept):**
-- When an AI agent's model update causes a quality breach, the remediation agent (or triage agent) can request the Arbiter to reduce that agent's autonomy
+- When an AI agent's model update causes a quality breach, the remediation agent (or triage agent) can request the nthlayer-measure to reduce that agent's autonomy
 - `reduce_autonomy` is a built-in safe action in the registry, targeting `POST {arbiter_url}/api/v1/governance/reduce`
 - Unlike other safe actions (which target infrastructure), this targets another ecosystem component
-- The Arbiter's one-way safety ratchet means reduction always succeeds; restoration requires a separate human action
+- The nthlayer-measure's one-way safety ratchet means reduction always succeeds; restoration requires a separate human action
 - Trigger condition in TriageAgent._post_execute: any trigger verdict has tag `"agent_model_update"` AND `result.severity <= 2`
 
 **Approval ratchet:**
 - The model can escalate approval requirements (request human sign-off) but never downgrade them
 - If a safe action's default is `requires_approval=True`, the model cannot override it to False
-- Same principle as the Arbiter's autonomy ratchet — one-way safety mechanisms
+- Same principle as the nthlayer-measure's autonomy ratchet — one-way safety mechanisms
 
 **Crash recovery:**
 - `IncidentContext` serialised to SQLite after each pipeline step
@@ -117,7 +117,7 @@ Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
 - `_emit_verdict`: sets `subject.type=role.value`, wires `lineage.context` from `context.trigger_verdict_ids`, chains `lineage.parent` from `context.verdict_chain[-1]`
 - `_degraded_verdict`: emits `confidence=0.0`, `action="escalate"`, tags `["degraded","human-takeover-required"]` when model fails
 - `_parse_json`: strips markdown fences and preamble before parsing; handles `{...}` extraction from noisy model output
-- `_request_autonomy_reduction`: stdlib `urllib`, 3 retries, POST to Arbiter governance endpoint
+- `_request_autonomy_reduction`: stdlib `urllib`, 3 retries, POST to nthlayer-measure governance endpoint
 
 **Two-phase communication:**
 - Phase 1 (called when `context.remediation is None`): drafts initial status update
@@ -126,20 +126,20 @@ Alert Source (Arbiter quality breach / Prometheus alert / any webhook)
 **Post-incident learning loop:**
 - Manifest updates (tighter SLO targets, new dependency declarations, new safe action definitions)
 - NthLayer alerting rule refinements from quality patterns
-- Arbiter judgment SLO threshold revisions from historical data
-- SitRep correlation improvements from past incident accuracy
+- nthlayer-measure judgment SLO threshold revisions from historical data
+- nthlayer-correlate correlation improvements from past incident accuracy
 <!-- END AUTO-MANAGED -->
 
 <!-- AUTO-MANAGED: verdict-integration -->
 ## Verdict Integration
 
-All agents produce verdicts via `AgentBase._emit_verdict`. Consuming SitRep correlation verdicts as trigger input is implemented (TriageAgent and InvestigationAgent read from `context.trigger_verdict_ids`). See `verdicts/` and `VERDICT-INTEGRATION.md`.
+All agents produce verdicts via `AgentBase._emit_verdict`. Consuming nthlayer-correlate correlation verdicts as trigger input is implemented (TriageAgent and InvestigationAgent read from `context.trigger_verdict_ids`). See `nthlayer-learn/` for the verdict library.
 
-**Install:** verdict is a path dependency managed via `uv.sources` (`uv sync` installs it automatically from `../verdicts/lib/python`)
+**Install:** verdict is a path dependency managed via `uv.sources` (`uv sync` installs it automatically from `../nthlayer-learn/lib/python`)
 
 **Shared store:** single `verdicts.db` with WAL mode — NOT a per-component store. All ecosystem components read/write the same file.
 
-**Consuming SitRep verdicts (implemented — Triage and Investigation agents read trigger_verdict_ids):**
+**Consuming nthlayer-correlate verdicts (implemented — Triage and Investigation agents read trigger_verdict_ids):**
 ```python
 sitrep_verdicts = verdict_store.query(VerdictFilter(
     producer_system="sitrep", subject_type="correlation",
@@ -155,11 +155,11 @@ sitrep_verdicts = verdict_store.query(VerdictFilter(
 - Remediation Agent → `subject.type: "remediation"` verdict (proposed fix, rollback decision)
 - `"escalation"` and `"incident_summary"` types map to `"custom"` with `metadata.custom["incident_type"]`
 
-All Mayday verdicts include `lineage.context = [sitrep_verdict.id, ...]` linking to the SitRep verdicts that informed them.
+All nthlayer-respond verdicts include `lineage.context = [sitrep_verdict.id, ...]` linking to the nthlayer-correlate verdicts that informed them.
 
-**Lineage chain:** SitRep correlation verdicts → Mayday triage verdict → investigation verdict → remediation verdict → human override verdict. One human override at any point calibrates every component upstream via lineage traversal.
+**Lineage chain:** nthlayer-correlate correlation verdicts → nthlayer-respond triage verdict → investigation verdict → remediation verdict → human override verdict. One human override at any point calibrates every component upstream via lineage traversal.
 
-**Degraded mode:** Agents still produce verdicts with `confidence: 0.0` and a note in `reasoning` when operating on stale SitRep data or without model access.
+**Degraded mode:** Agents still produce verdicts with `confidence: 0.0` and a note in `reasoning` when operating on stale nthlayer-correlate data or without model access.
 
 **Verdict config:**
 ```yaml
@@ -180,15 +180,15 @@ verdict:
 - Escalation paths and ownership metadata (Communication Agent)
 
 **Ecosystem dependencies:**
-- **SitRep** — correlated snapshots as starting context for every incident
-- **Arbiter** — quality scores for agent reliability; governance layer adjusts Mayday agent autonomy
-- **NthLayer** — topology exports, deployment gate status; consumes Mayday post-incident findings
+- **nthlayer-correlate** — correlated snapshots as starting context for every incident
+- **nthlayer-measure** — quality scores for agent reliability; governance layer adjusts nthlayer-respond agent autonomy
+- **NthLayer** — topology exports, deployment gate status; consumes nthlayer-respond post-incident findings
 
 **OpenSRM ecosystem** (each component works standalone, composes via shared manifests + OTel):
-- [nthlayer-spec](../nthlayer-spec/) — service reliability specification
-- [nthlayer-learn](../verdicts/) — data primitive; Mayday consumes SitRep's verdicts and produces its own per agent role
-- [nthlayer-measure](../arbiter/) — quality measurement and AI agent governance
+- [opensrm](../opensrm/) — service reliability specification
+- [nthlayer-learn](../nthlayer-learn/) — data primitive; nthlayer-respond consumes nthlayer-correlate's verdicts and produces its own per agent role
+- [nthlayer-measure](../nthlayer-measure/) — quality measurement and AI agent governance
 - [nthlayer](../nthlayer/) — generate monitoring infrastructure from manifests
-- [nthlayer-correlate](../sitrep/) — situational awareness through signal correlation
+- [nthlayer-correlate](../nthlayer-correlate/) — situational awareness through signal correlation
 - nthlayer-respond (this repo) — multi-agent incident response
 <!-- END AUTO-MANAGED -->
