@@ -540,10 +540,6 @@ def cmd_respond(args) -> None:
     """Respond to a correlation verdict — run the full agent pipeline."""
     from pathlib import Path
 
-    from nthlayer_learn import SQLiteVerdictStore
-
-    from nthlayer_respond.types import IncidentState
-
     verdict_store = SQLiteVerdictStore(args.verdict_store)
 
     # Read trigger correlation verdict
