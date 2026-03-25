@@ -34,7 +34,7 @@ def specs_dir(tmp_path):
 
 def _make_correlation_verdict(store):
     """Create and store a mock correlation verdict."""
-    from nthlayer_learn import create as verdict_create, link as verdict_link
+    from nthlayer_learn import create as verdict_create
 
     v = verdict_create(
         subject={
@@ -68,7 +68,7 @@ def test_respond_command_builds_incident_from_verdict(specs_dir, tmp_path):
     corr = _make_correlation_verdict(store)
 
     # Mock the coordinator to avoid needing a real model
-    from nthlayer_respond.types import IncidentContext, IncidentState
+    from nthlayer_respond.types import IncidentState
 
     async def mock_run(context):
         context.state = IncidentState.RESOLVED
