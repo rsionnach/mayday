@@ -369,7 +369,7 @@ class AgentBase(ABC):
                      response_length=len(response), body=body_preview)
             result = self.parse_response(response, context)
             context = self._apply_result(context, result)
-            confidence = getattr(result, "root_cause_confidence", None) or getattr(result, "confidence", 0.5)
+            confidence = getattr(result, "root_cause_confidence", None) or getattr(result, "confidence", None) or 0.0
             summary = self._build_summary(context, result)
             self._emit_verdict(
                 context,

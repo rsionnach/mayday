@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
+
+from nthlayer_common.prompts import extract_confidence, load_prompt, render_user_prompt
 
 from nthlayer_respond.agents.base import AgentBase
 from nthlayer_respond.types import AgentRole, IncidentContext, TriageResult
+
+_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "triage.yaml"
 
 
 class TriageAgent(AgentBase):
@@ -23,13 +28,7 @@ class TriageAgent(AgentBase):
     # ------------------------------------------------------------------ #
 
     def build_prompt(self, context: IncidentContext) -> tuple[str, str]:
-        system = (
-            "You are a triage agent for incident response. "
-            "Assess severity (0-4, where 0 is P0 critical), blast radius, "
-            "affected SLOs, and team assignment. "
-            "Your judgment SLO: less than 10% severity reversal rate. "
-            "Respond with ONLY valid JSON."
-        )
+        spec = load_prompt(_PROMPT_PATH)
 
         parts: list[str] = []
 
@@ -51,22 +50,19 @@ class TriageAgent(AgentBase):
                 except Exception:  # noqa: BLE001
                     pass
         else:
-            # pagerduty or manual
             parts.append(
                 "No pre-correlation available. Raw alert only. "
                 "Assess based solely on the topology information below."
             )
 
-        # Service context from OpenSRM spec + evaluation verdict
         svc_ctx = self._build_service_context_prompt(context)
         if svc_ctx:
             parts.append(svc_ctx)
 
-        # Always include topology
         parts.append(f"\nTopology: {json.dumps(context.topology)}")
 
-        user = "\n".join(parts)
-        return system, user
+        user = render_user_prompt(spec.user_template, context="\n".join(parts))
+        return spec.system, user
 
     def parse_response(self, response: str, context: IncidentContext) -> TriageResult:
         data = self._parse_json(response)
@@ -79,6 +75,7 @@ class TriageAgent(AgentBase):
         affected_slos: list[str] = data.get("affected_slos") or []
         assigned_team: str | None = data.get("assigned_team") or data.get("team_assignment")
         reasoning: str = data.get("reasoning", "") or data.get("rationale", "")
+        confidence = extract_confidence(data)
 
         return TriageResult(
             severity=severity,
@@ -86,6 +83,7 @@ class TriageAgent(AgentBase):
             affected_slos=affected_slos,
             assigned_team=assigned_team,
             reasoning=reasoning,
+            confidence=confidence,
         )
 
     def _apply_result(

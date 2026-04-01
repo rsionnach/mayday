@@ -38,6 +38,7 @@ class TriageResult:
     affected_slos: list[str]
     assigned_team: str | None
     reasoning: str
+    confidence: float | None = None  # from model response; None = not yet parsed
 
 
 @dataclass
