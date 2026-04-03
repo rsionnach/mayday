@@ -1,0 +1,68 @@
+"""Tests for Slack block builders."""
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+from nthlayer_respond.notifications import (
+    build_approval_blocks,
+    build_remediation_blocks,
+)
+
+
+def _make_verdict(summary="rollback on fraud-detect", confidence=0.85, verdict_id="vrd-123"):
+    v = MagicMock()
+    v.id = verdict_id
+    v.subject.summary = summary
+    v.judgment.confidence = confidence
+    return v
+
+
+def test_build_approval_blocks_has_actions():
+    """build_approval_blocks includes approve/reject buttons."""
+    verdict = _make_verdict()
+    blocks, text = build_approval_blocks(verdict, "INC-FRAUD-20260403")
+
+    action_blocks = [b for b in blocks if b.get("type") == "actions"]
+    assert len(action_blocks) == 1
+
+    elements = action_blocks[0]["elements"]
+    assert len(elements) == 2
+
+    approve_btn = elements[0]
+    assert approve_btn["action_id"] == "approve"
+    assert approve_btn["value"] == "INC-FRAUD-20260403"
+    assert approve_btn["style"] == "primary"
+
+    reject_btn = elements[1]
+    assert reject_btn["action_id"] == "reject"
+    assert reject_btn["value"] == "INC-FRAUD-20260403"
+    assert reject_btn["style"] == "danger"
+
+
+def test_build_approval_blocks_includes_remediation_info():
+    """build_approval_blocks includes the remediation summary."""
+    verdict = _make_verdict(summary="rollback on fraud-detect (requires approval)")
+    blocks, text = build_approval_blocks(verdict, "INC-FRAUD-20260403")
+
+    section_texts = [
+        b["text"]["text"]
+        for b in blocks
+        if b.get("type") == "section" and "text" in b
+    ]
+    assert any("rollback on fraud-detect" in t for t in section_texts)
+
+
+def test_build_approval_blocks_block_id_contains_incident():
+    """Actions block_id contains the incident ID for routing."""
+    verdict = _make_verdict()
+    blocks, _ = build_approval_blocks(verdict, "INC-FRAUD-20260403")
+
+    action_blocks = [b for b in blocks if b.get("type") == "actions"]
+    assert action_blocks[0]["block_id"] == "approval_INC-FRAUD-20260403"
+
+
+def test_build_approval_blocks_fallback_text():
+    """Fallback text is descriptive."""
+    verdict = _make_verdict()
+    _, text = build_approval_blocks(verdict, "INC-FRAUD-20260403")
+    assert "APPROVAL REQUIRED" in text

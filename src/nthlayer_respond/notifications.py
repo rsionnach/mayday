@@ -44,6 +44,44 @@ def build_remediation_blocks(verdict, context=None) -> tuple[list[dict], str]:
     return blocks, text
 
 
+def build_approval_blocks(verdict, incident_id: str, context=None) -> tuple[list[dict], str]:
+    """Build Slack blocks for remediation approval request with interactive buttons."""
+    summary = verdict.subject.summary or "Remediation proposed"
+    first_sentence = summary.split(".")[0] if summary else "Remediation proposed"
+    confidence = verdict.judgment.confidence
+
+    text = f"\u2757 APPROVAL REQUIRED: {first_sentence}"
+
+    blocks = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": "*\u2757 APPROVAL REQUIRED*"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": first_sentence}},
+        {"type": "context", "elements": [
+            {"type": "mrkdwn", "text": f"nthlayer-respond \u00b7 confidence {confidence:.2f} \u00b7 {verdict.id}"},
+        ]},
+        {
+            "type": "actions",
+            "block_id": f"approval_{incident_id}",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Approve"},
+                    "style": "primary",
+                    "action_id": "approve",
+                    "value": incident_id,
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Reject"},
+                    "style": "danger",
+                    "action_id": "reject",
+                    "value": incident_id,
+                },
+            ],
+        },
+    ]
+    return blocks, text
+
+
 def build_verification_blocks(verdict, verified: bool | None = None) -> tuple[list[dict], str]:
     """Build Slack blocks for remediation verification result."""
     if verified is True:
