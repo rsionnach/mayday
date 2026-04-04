@@ -275,6 +275,7 @@ class ApprovalServer:
         task = self._timeouts.pop(incident_id, None)
         if task and not task.done():
             task.cancel()
+        self._locks.pop(incident_id, None)
 
     async def _timeout_task(self, incident_id: str, delay: float | None = None) -> None:
         """Wait for delay seconds, then auto-reject if still awaiting approval.

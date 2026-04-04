@@ -84,12 +84,14 @@ def build_parser() -> argparse.ArgumentParser:
     # approve
     approve = sub.add_parser("approve", help="Approve pending remediation")
     approve.add_argument("incident_id", help="Incident ID")
+    approve.add_argument("--approved-by", default=None, help="Identity of approver (e.g. email)")
     approve.add_argument("--config", default="respond.yaml", help="Config file path")
 
     # reject
     reject = sub.add_parser("reject", help="Reject pending remediation")
     reject.add_argument("incident_id", help="Incident ID")
     reject.add_argument("--reason", required=True, help="Rejection reason")
+    reject.add_argument("--rejected-by", default=None, help="Identity of rejector (e.g. email)")
     reject.add_argument("--config", default="respond.yaml", help="Config file path")
 
     # resume
@@ -530,7 +532,7 @@ def main() -> None:
         async def _approve():
             coord, store = _make_coordinator(config)
             try:
-                ctx = await coord.approve(args.incident_id)
+                ctx = await coord.approve(args.incident_id, approved_by=args.approved_by)
                 print(f"Approved. State: {ctx.state.value}")
             finally:
                 store.close()
@@ -541,7 +543,7 @@ def main() -> None:
         async def _reject():
             coord, store = _make_coordinator(config)
             try:
-                ctx = await coord.reject(args.incident_id, args.reason)
+                ctx = await coord.reject(args.incident_id, args.reason, rejected_by=args.rejected_by)
                 print(f"Rejected. State: {ctx.state.value}")
             finally:
                 store.close()
