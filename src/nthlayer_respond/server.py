@@ -37,6 +37,13 @@ class ApprovalServer:
         self._context_store = context_store
         self._config = config
         self._timeouts: dict[str, asyncio.Task] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def _get_lock(self, incident_id: str) -> asyncio.Lock:
+        """Get or create a per-incident lock to serialize approve/reject/timeout."""
+        if incident_id not in self._locks:
+            self._locks[incident_id] = asyncio.Lock()
+        return self._locks[incident_id]
 
     def build_app(self) -> Starlette:
         """Build the Starlette ASGI application."""
@@ -73,17 +80,18 @@ class ApprovalServer:
             return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
         approved_by = body.get("approved_by")
 
-        try:
-            ctx = await self._coordinator.approve(
-                incident_id, approved_by=approved_by
-            )
-        except ValueError as exc:
-            msg = str(exc)
-            if "not found" in msg.lower():
-                return JSONResponse({"error": msg}, status_code=404)
-            return JSONResponse({"error": msg}, status_code=409)
+        async with self._get_lock(incident_id):
+            try:
+                ctx = await self._coordinator.approve(
+                    incident_id, approved_by=approved_by
+                )
+            except ValueError as exc:
+                msg = str(exc)
+                if "not found" in msg.lower():
+                    return JSONResponse({"error": msg}, status_code=404)
+                return JSONResponse({"error": msg}, status_code=409)
 
-        self.cancel_timeout(incident_id)
+            self.cancel_timeout(incident_id)
 
         return JSONResponse({
             "incident_id": ctx.id,
@@ -110,17 +118,18 @@ class ApprovalServer:
                 {"error": "reason is required"}, status_code=400
             )
 
-        try:
-            ctx = await self._coordinator.reject(
-                incident_id, reason, rejected_by=rejected_by
-            )
-        except ValueError as exc:
-            msg = str(exc)
-            if "not found" in msg.lower():
-                return JSONResponse({"error": msg}, status_code=404)
-            return JSONResponse({"error": msg}, status_code=409)
+        async with self._get_lock(incident_id):
+            try:
+                ctx = await self._coordinator.reject(
+                    incident_id, reason, rejected_by=rejected_by
+                )
+            except ValueError as exc:
+                msg = str(exc)
+                if "not found" in msg.lower():
+                    return JSONResponse({"error": msg}, status_code=404)
+                return JSONResponse({"error": msg}, status_code=409)
 
-        self.cancel_timeout(incident_id)
+            self.cancel_timeout(incident_id)
 
         return JSONResponse({
             "incident_id": ctx.id,
@@ -187,28 +196,35 @@ class ApprovalServer:
         action = actions[0]
         action_id = action.get("action_id")
         incident_id = action.get("value")
-        user_name = payload.get("user", {}).get("name", "unknown")
-        channel_id = payload.get("channel", {}).get("id")
-        message_ts = payload.get("message", {}).get("ts")
+        if not incident_id:
+            return Response(status_code=200)
 
-        try:
-            if action_id == "approve":
-                ctx = await self._coordinator.approve(
-                    incident_id, approved_by=user_name
-                )
-            elif action_id == "reject":
-                ctx = await self._coordinator.reject(
-                    incident_id,
-                    f"Rejected via Slack by {user_name}",
-                    rejected_by=user_name,
-                )
-            else:
-                return Response(status_code=200)
-        except ValueError as exc:
-            logger.warning("Slack interaction failed: %s", exc)
-            return Response(status_code=200)  # Slack expects 200
+        user = payload.get("user") or {}
+        user_name = user.get("name", "unknown") if isinstance(user, dict) else "unknown"
+        channel = payload.get("channel") or {}
+        channel_id = channel.get("id") if isinstance(channel, dict) else None
+        message = payload.get("message") or {}
+        message_ts = message.get("ts") if isinstance(message, dict) else None
 
-        self.cancel_timeout(incident_id)
+        async with self._get_lock(incident_id):
+            try:
+                if action_id == "approve":
+                    ctx = await self._coordinator.approve(
+                        incident_id, approved_by=user_name
+                    )
+                elif action_id == "reject":
+                    ctx = await self._coordinator.reject(
+                        incident_id,
+                        f"Rejected via Slack by {user_name}",
+                        rejected_by=user_name,
+                    )
+                else:
+                    return Response(status_code=200)
+            except ValueError as exc:
+                logger.warning("Slack interaction failed: %s", exc)
+                return Response(status_code=200)  # Slack expects 200
+
+            self.cancel_timeout(incident_id)
 
         # Update original message to remove buttons (fire-and-forget)
         if self._config.slack_bot_token and channel_id and message_ts:
@@ -271,21 +287,22 @@ class ApprovalServer:
         except asyncio.CancelledError:
             return
 
-        ctx = self._context_store.load(incident_id)
-        if ctx is None or ctx.state != IncidentState.AWAITING_APPROVAL:
-            return
+        async with self._get_lock(incident_id):
+            ctx = self._context_store.load(incident_id)
+            if ctx is None or ctx.state != IncidentState.AWAITING_APPROVAL:
+                return
 
-        try:
-            await self._coordinator.reject(
-                incident_id,
-                f"Approval timed out after {self._config.approval_timeout_seconds}s",
-                rejected_by="system/timeout",
-            )
-            logger.info("Approval timed out", extra={"incident_id": incident_id})
-        except Exception as exc:
-            logger.warning("Timeout reject failed: %s", exc)
-        finally:
-            self._timeouts.pop(incident_id, None)
+            try:
+                await self._coordinator.reject(
+                    incident_id,
+                    f"Approval timed out after {self._config.approval_timeout_seconds}s",
+                    rejected_by="system/timeout",
+                )
+                logger.info("Approval timed out", extra={"incident_id": incident_id})
+            except Exception as exc:
+                logger.warning("Timeout reject failed: %s", exc)
+            finally:
+                self._timeouts.pop(incident_id, None)
 
     async def recover_pending_approvals(self) -> None:
         """On startup, scan for AWAITING_APPROVAL incidents and start timeouts."""
