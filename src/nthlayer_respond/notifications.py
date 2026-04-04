@@ -150,6 +150,36 @@ def find_slack_thread_ts(verdict_store, verdict_ids: list[str]) -> str | None:
     return None
 
 
+def should_notify(context, event_type: str, severity: int | None = None) -> bool:
+    """Check if an event should trigger a notification based on manifest config.
+
+    Resolution:
+    - No notifications config in context → allow all events
+    - Events list defined → only listed types trigger
+    - Severity filter on event entry → only matching severities trigger
+    - Severity=None (not provided) → matches any severity filter
+    """
+    metadata = context.metadata if isinstance(context.metadata, dict) else {}
+    service_ctx = metadata.get("service_context", {})
+    spec = service_ctx.get("spec", {})
+    notifications = spec.get("notifications", {})
+    events = notifications.get("events")
+
+    if events is None:
+        return True  # no filter = allow all
+
+    for entry in events:
+        if entry.get("type") != event_type:
+            continue
+        # Type matches — check severity filter
+        sev_filter = entry.get("severity")
+        if sev_filter is None or severity is None:
+            return True  # no severity filter or no severity provided
+        return severity in sev_filter
+
+    return False  # event type not in list
+
+
 def resolve_slack_channel(context, env_fallback: str | None = None) -> str | None:
     """Resolve Slack channel ID from service manifest or env var.
 
