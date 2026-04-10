@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, develop]
 
+
+env:
+  UV_NO_SOURCES: "1"
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -26,7 +29,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --extra dev --no-sources
+        run: uv sync --extra dev
 
       - name: Run linting
         run: uv run --no-sync ruff check src/ tests/ --ignore E501,B008,F841,B007,E402,E721,E722,B012,I001
@@ -46,7 +49,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --extra dev --no-sources
+        run: uv sync --extra dev
 
       - name: Run ruff
         run: uv run --no-sync ruff check src/ tests/ --ignore E501,B008,F841,B007,E402,E721,E722,B012,I001
@@ -63,7 +66,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --extra dev --no-sources
+        run: uv sync --extra dev
 
       - name: Run pip-audit
         run: |

@@ -13,9 +13,6 @@ from typing import Any
 import structlog
 import yaml
 from nthlayer_learn import MemoryStore, SQLiteVerdictStore
-
-logger = structlog.get_logger(__name__)
-
 from nthlayer_respond.agents.communication import CommunicationAgent
 from nthlayer_respond.agents.investigation import InvestigationAgent
 from nthlayer_respond.agents.remediation import RemediationAgent
@@ -26,6 +23,8 @@ from nthlayer_respond.coordinator import Coordinator
 from nthlayer_respond.safe_actions.actions import register_builtin_actions
 from nthlayer_respond.safe_actions.registry import SafeActionRegistry
 from nthlayer_respond.types import AgentRole, IncidentContext, IncidentState
+
+logger = structlog.get_logger(__name__)
 
 
 def _make_coordinator(config: RespondConfig) -> tuple[Coordinator, SQLiteContextStore]:
@@ -44,7 +43,7 @@ def _make_coordinator(config: RespondConfig) -> tuple[Coordinator, SQLiteContext
         AgentRole.COMMUNICATION: CommunicationAgent(config.model, config.max_tokens, verdict_store, agent_config),
         AgentRole.REMEDIATION: RemediationAgent(config.model, config.max_tokens, verdict_store, agent_config, safe_action_registry=registry),
     }
-    return Coordinator(agents, store, verdict_store, config), store
+    return Coordinator(agents, store, verdict_store, config, safe_action_registry=registry), store
 
 
 # ------------------------------------------------------------------ #
@@ -61,8 +60,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     # serve
-    serve = sub.add_parser("serve", help="Start polling loop")
+    serve = sub.add_parser("serve", help="Start approval server")
     serve.add_argument("--config", default="respond.yaml", help="Config file path")
+    serve.add_argument("--host", default=None, help="Override server host")
+    serve.add_argument("--port", type=int, default=None, help="Override server port")
 
     # status
     status = sub.add_parser("status", help="Show active incidents")
@@ -82,12 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
     # approve
     approve = sub.add_parser("approve", help="Approve pending remediation")
     approve.add_argument("incident_id", help="Incident ID")
+    approve.add_argument("--approved-by", default=None, help="Identity of approver (e.g. email)")
     approve.add_argument("--config", default="respond.yaml", help="Config file path")
 
     # reject
     reject = sub.add_parser("reject", help="Reject pending remediation")
     reject.add_argument("incident_id", help="Incident ID")
     reject.add_argument("--reason", required=True, help="Rejection reason")
+    reject.add_argument("--rejected-by", default=None, help="Identity of rejector (e.g. email)")
     reject.add_argument("--config", default="respond.yaml", help="Config file path")
 
     # resume
@@ -365,6 +368,7 @@ async def replay_command(
         context_store=context_store,
         verdict_store=verdict_store,
         config=config,
+        safe_action_registry=registry,
     )
 
     # Handle crash_after_step for crash-recovery scenarios.
@@ -458,10 +462,31 @@ def _status_command(config_path: str) -> None:
         store.close()
 
 
-def _serve_command(config_path: str) -> None:
-    """Start the polling loop (stub)."""
-    print(f"[nthlayer-respond serve] Not yet implemented. Config: {config_path}")
-    sys.exit(0)
+def _serve_command(config_path: str, host: str | None = None, port: int | None = None) -> None:
+    """Start the approval server."""
+    import uvicorn
+
+    config = load_config(config_path)
+    if host:
+        config.server_host = host
+    if port:
+        config.server_port = port
+
+    coordinator, ctx_store = _make_coordinator(config)
+
+    from nthlayer_respond.server import ApprovalServer
+
+    verdict_store = SQLiteVerdictStore(config.verdict_store_path)
+    server = ApprovalServer(coordinator, ctx_store, config, verdict_store=verdict_store)
+    app = server.build_app()
+
+    print(f"[nthlayer-respond serve] Starting on {config.server_host}:{config.server_port}")
+    uvicorn.run(
+        app,
+        host=config.server_host,
+        port=config.server_port,
+        log_level="info",
+    )
 
 
 # ------------------------------------------------------------------ #
@@ -479,7 +504,7 @@ def main() -> None:
         sys.exit(1)
 
     if args.command == "serve":
-        _serve_command(args.config)
+        _serve_command(args.config, host=args.host, port=args.port)
 
     elif args.command == "status":
         _status_command(args.config)
@@ -504,7 +529,7 @@ def main() -> None:
         async def _approve():
             coord, store = _make_coordinator(config)
             try:
-                ctx = await coord.approve(args.incident_id)
+                ctx = await coord.approve(args.incident_id, approved_by=args.approved_by)
                 print(f"Approved. State: {ctx.state.value}")
             finally:
                 store.close()
@@ -515,7 +540,7 @@ def main() -> None:
         async def _reject():
             coord, store = _make_coordinator(config)
             try:
-                ctx = await coord.reject(args.incident_id, args.reason)
+                ctx = await coord.reject(args.incident_id, args.reason, rejected_by=args.rejected_by)
                 print(f"Rejected. State: {ctx.state.value}")
             finally:
                 store.close()

@@ -7,16 +7,15 @@ import structlog
 from pathlib import Path
 
 from nthlayer_common.prompts import extract_confidence, load_prompt, render_user_prompt
-
 from nthlayer_respond.agents.base import AgentBase
-
-_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "remediation.yaml"
 from nthlayer_respond.safe_actions.registry import SafeActionRegistry
 from nthlayer_respond.types import (
     AgentRole,
     IncidentContext,
     RemediationResult,
 )
+
+_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "remediation.yaml"
 
 logger = structlog.get_logger(__name__)
 

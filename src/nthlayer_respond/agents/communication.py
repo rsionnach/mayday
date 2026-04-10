@@ -5,17 +5,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from nthlayer_common.prompts import extract_confidence, load_prompt, render_user_prompt
-
+from nthlayer_common.prompts import extract_confidence, load_prompt
 from nthlayer_respond.agents.base import AgentBase
-
-_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "communication.yaml"
 from nthlayer_respond.types import (
     AgentRole,
     CommunicationResult,
     CommunicationUpdate,
     IncidentContext,
 )
+
+_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "communication.yaml"
 
 
 class CommunicationAgent(AgentBase):

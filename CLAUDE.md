@@ -34,13 +34,17 @@ Follows [Zero Framework Cognition](ZFC.md): the orchestrator is pure transport; 
 **Source layout (`src/nthlayer_respond/`):**
 - `cli.py` — 7 subcommands: serve, status, replay, approve, reject, resume, respond
 - `coordinator.py` — deterministic state machine; sequences agent pipeline; persists IncidentContext to SQLite
-- `types.py` — IncidentContext, TriageResult, InvestigationResult, RemediationResult, CommunicationResult, Hypothesis
-- `config.py` — RespondConfig, load_config
+- `types.py` — IncidentContext, TriageResult, InvestigationResult, RemediationResult, CommunicationResult, Hypothesis; all result types have `confidence: float | None = None` — `None` means "not yet parsed from model response" (not a hardcoded fallback value)
+- `config.py` — RespondConfig, load_config. `RespondConfig.model` defaults to `NTHLAYER_MODEL` env var if set, else `claude-sonnet-4-20250514`. Slack fields: `slack_signing_secret`, `slack_bot_token` (both default `""`); loaded from `slack:` YAML section.
 - `context_store.py` — SQLiteContextStore (crash recovery persistence)
-- `agents/base.py` — AgentBase ABC; transport layer (model calls, verdict emission, governance HTTP)
+- `server.py` — `ApprovalServer` (Starlette ASGI): routes for approve/reject/status + Slack interaction callback + `GET /metrics`; `verdict_store` param wires `VerdictMetricsCollector` for Prometheus scraping; approval timeout tracking with auto-reject; `recover_pending_approvals()` restores timeouts on startup
+- `metrics.py` — `VerdictMetricsCollector`: queries verdict store; emits plain Prometheus text exposition (no prometheus_client dep); gauges: `nthlayer_verdicts_total`, `nthlayer_verdict_accuracy` (1 - reversal rate), `nthlayer_verdict_reversal_rate`; labels: `component` (strips "nthlayer-" prefix), `verdict_type`, `window` (7d/30d); accuracy/reversal gauges omitted when no resolved verdicts in window
+- `agents/base.py` — AgentBase ABC; transport layer (model calls, verdict emission, governance HTTP, Slack notifications)
 - `agents/triage.py`, `investigation.py`, `remediation.py`, `communication.py` — concrete agents
+- `notifications.py` — Slack block builders and `send_slack_notification()` async helper; `should_notify(context, event_type, severity=None)` checks `spec.notifications.events` filter (absent = allow all; severity filter [0-4] optional per entry); `resolve_slack_channel` resolution order: spec.notifications.slack.channel_id → spec.ownership.slack_channel → SLACK_CHANNEL_ID env → None; opt-in via `SLACK_WEBHOOK_URL`
 - `safe_actions/registry.py` — SafeActionRegistry (closed callable registry, cooldown tracking)
-- `safe_actions/actions.py` — register_builtin_actions (rollback, scale_up, disable_feature_flag, reduce_autonomy, pause_pipeline)
+- `safe_actions/actions.py` — YAML-driven registration: `load_safe_action_policy()` reads `registry/safe-actions.yaml`; `register_builtin_actions()` checks `binding` field — uses `_make_webhook_handler(binding)` if binding is present and not `"stub"`, else falls back to `_HANDLERS` stub; actions with no handler and no binding emit `logger.warning` and are skipped
+- `safe_actions/webhook.py` — `WebhookDispatcher` class (`execute`, `_call_webhook`, `_verify`); `ExecutionResult` dataclass; `render_binding_templates()` and `resolve_secrets()` module-level utilities
 
 **Scenario fixtures (`scenarios/synthetic/`):**
 8 YAML replay fixtures: cascading-failure, autonomy-reduction, crash-recovery, human-override, low-confidence-escalation, model-unavailable, remediation-approval, sitrep-unavailable. Each has `mock_responses` keyed by: triage, investigation, communication_initial, remediation, communication_resolution.
@@ -95,6 +99,81 @@ Alert Source (nthlayer-measure quality breach / Prometheus alert / any webhook)
 - `_handle_interactions()`: processes scenario `interactions[]` entries — supports `after:remediation_proposed/approve`, `after:remediation_proposed/reject`, `after:triage/reject`
 <!-- END AUTO-MANAGED -->
 
+<!-- AUTO-MANAGED: safe-action-registry -->
+## Safe Action Registry (`registry/safe-actions.yaml`)
+
+Policy source of truth for all safe actions. Python enforcement logic (novel action rejection, approval ratchet, applicability checks, blast radius validation) stays in `safe_actions/registry.py`; this file declares what exists and when it applies.
+
+**5 built-in actions:**
+
+| Action | Risk | Approval | Cooldown | Target | Applicable to |
+|--------|------|----------|----------|--------|---------------|
+| `rollback` | high | required | 300s | service | api, worker, ai-gate / deployment_regression, model_regression, config_change |
+| `scale_up` | low | auto | 120s | service | api, worker only — **NOT ai-gate** ("AI gate failures are judgment quality issues, not capacity") |
+| `disable_feature_flag` | medium | required | 60s | feature_flag | api, worker, ai-gate / feature_regression, config_change, a_b_test_failure |
+| `reduce_autonomy` | low | auto | 0s | agent | ai-gate only — **NOT api/worker** ("Autonomy reduction targets AI agents, not infrastructure services") |
+| `pause_pipeline` | medium | required | 60s | service | api, worker, ai-gate / deployment_regression, cascading_failure |
+
+**YAML schema per action:** `description`, `risk` (high/medium/low), `requires_approval` (bool), `cooldown_seconds`, `target_type`, `applicable_to.service_types[]`, `applicable_to.failure_modes[]`, optional `not_applicable_to.service_types[]` + `not_applicable_to.reason`, `blast_radius` (prose), `estimated_recovery`.
+
+**Handler wiring:** `register_builtin_actions()` in `safe_actions/actions.py` checks each action's `binding` field at registration time: if `binding` is present and not `"stub"`, creates a `WebhookDispatcher`-backed async handler via `_make_webhook_handler(binding)`; otherwise falls back to `_HANDLERS[name]` stub. Actions with no handler and no binding emit `logger.warning` and are skipped — not a crash.
+
+**Execution bindings (implemented — bead opensrm-9sv.3):**
+
+`rollback` uses a full webhook binding (live). The other 4 actions use `binding: stub` (stub handlers fire). Each action in `safe-actions.yaml` can declare a `binding` section:
+
+```yaml
+binding:
+  method: webhook
+  url: "https://example.internal/api/{{service}}/rollback"  # {{variable}} template syntax
+  headers:
+    Authorization: "Bearer ${SECRET_TOKEN}"  # ${ENV_VAR} resolved at execution time
+  body: { ... }
+  timeout: 30
+  retry:
+    attempts: 3
+    backoff: [1, 2, 4]
+  verify_after:            # optional PromQL-based post-execution check
+    wait: 60               # seconds before querying
+    prometheus_url: "${PROMETHEUS_URL}"
+    query: >               # must return scalar boolean (comparison operator)
+      rate(http_requests_total{service="{{service}}", status=~"5.."}[2m]) < 0.01
+    description: "human-readable success condition"
+```
+
+`verify_after` result semantics: query returns `1` → `verified: true`; returns `0` → `verified: false` (with detail); Prometheus unreachable or no results → `verified: null` (warning, not failure). Result stored in verdict `metadata.custom.execution`.
+
+`safe_actions/webhook.py` — `WebhookDispatcher.execute(binding, variables)` renders templates → resolves secrets → POSTs via `httpx.AsyncClient` with retry → optionally calls `_verify`. `render_binding_templates(obj, variables)` handles `{{var}}` and `{{ var }}` forms; missing variables left as-is. `resolve_secrets(obj)` raises `ValueError` on missing env var — never logs secret values.
+
+Template variables available in bindings: `{{service}}` / `{{target}}` (from remediation result), `{{incident_id}}`, `{{severity}}`, `{{previous_revision}}` (from correlation verdict change event). Secrets (`${ENV_VAR}`) never logged, stored in verdicts, or included in prompts — missing var = clear error at execution time.
+<!-- END AUTO-MANAGED -->
+
+<!-- AUTO-MANAGED: prompts -->
+## Prompt Definitions (`prompts/`)
+
+YAML-based prompt definitions — migration from hardcoded Python strings to versioned YAML files complete. All 4 agents load prompts from YAML via `load_prompt(_PROMPT_PATH)` at `build_prompt()` call time.
+
+**YAML structure:** each file has `name`, `version`, `system` (with `{schema_block}` placeholder injected at load time by `nthlayer_common.prompts.load_prompt`; judgment SLO target embedded here), `response_schema` (JSON Schema), and `user_template` (`{{ context }}` — full incident context passed at call time).
+
+**Wiring pattern** (all 4 agents):
+```python
+from nthlayer_common.prompts import extract_confidence, load_prompt, render_user_prompt
+_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "triage.yaml"
+
+def build_prompt(self, context):
+    spec = load_prompt(_PROMPT_PATH)
+    # ... assemble user content ...
+    return spec.system, user_content
+```
+
+| File | Agent | Judgment SLO | Key schema fields |
+|------|-------|--------------|-------------------|
+| `prompts/triage.yaml` | `TriageAgent` | Severity reversal rate < 10% | `severity` (int 0-4), `blast_radius[]`, `affected_slos[]`, `assigned_team`, `reasoning`, `confidence` |
+| `prompts/investigation.yaml` | `InvestigationAgent` | Root cause agreement 70% | `hypotheses[].{description, confidence, evidence, change_candidate}`, `root_cause`, `root_cause_confidence`, `reasoning`, `confidence`; `root_cause_threshold` variable in system prompt |
+| `prompts/remediation.yaml` | `RemediationAgent` | Fix success rate 80% | `proposed_action`, `target`, `risk_assessment`, `requires_human_approval`, `reasoning`, `autonomy_reduction`, `confidence`; single `{{ safe_actions }}` variable in system prompt — formatted by `_format_safe_actions()` with risk levels, approval requirements, applicable failure modes, and `not_applicable_to` constraints loaded from `registry/safe-actions.yaml` |
+| `prompts/communication.yaml` | `CommunicationAgent` | Human edit rate < 15% | `updates[].{channel, update_type, content}`, `reasoning`, `confidence` |
+<!-- END AUTO-MANAGED -->
+
 <!-- AUTO-MANAGED: patterns -->
 ## Key Design Patterns
 
@@ -133,13 +212,15 @@ Alert Source (nthlayer-measure quality breach / Prometheus alert / any webhook)
 
 **AgentBase transport layer (all agents inherit):**
 - `_call_model`: delegates to `nthlayer_common.llm.llm_call` via `asyncio.to_thread` + `asyncio.wait_for` timeout; model format `"provider/model"` (anthropic, openai, ollama, etc.)
-- `_emit_verdict`: sets `subject.type=role.value`, wires `lineage.context` from `context.trigger_verdict_ids`, chains `lineage.parent` from `context.verdict_chain[-1]`
+- `_emit_verdict`: sets `subject.type=role.value`, wires `lineage.context` from `context.trigger_verdict_ids`, chains `lineage.parent` from `context.verdict_chain[-1]`; confidence fallback is `0.0` (not `0.5`) — `getattr(result, "root_cause_confidence", None) or getattr(result, "confidence", None) or 0.0`
 - `_build_service_context_prompt`: builds a service context section for agent prompts from `context.metadata.service_context`; emits service name, service_type (labelled "AI decision service" or "traditional service"), tier, team, breached SLO name/type with description ("JUDGMENT SLO — measures decision quality" vs "measures infrastructure reliability"), current/target values, declared SLOs list, and role-specific remediation guidance (AI gate: model rollback/canary revert/autonomy reduction; infra: rollback/scale_up/restart/feature flag disable); returns `""` if no `service_context` key present
+- `_prune_topology(topology, relevant_services)`: prunes topology dict to `relevant_services` + 1 hop of forward dependencies (from each service's `dependencies` list); returns topology unchanged if either arg is empty; used by all concrete agents in `build_prompt()` to reduce prompt token cost — triage prunes to `trigger_service` from `context.metadata`, investigation/remediation prune to `context.triage.blast_radius`; fall back to full topology if the relevant set is empty
 - `_degraded_verdict`: emits `confidence=0.0`, `action="escalate"`, tags `["degraded","human-takeover-required"]` when model fails; delegates subject summary to `_build_degraded_summary`
 - `_build_degraded_summary`: constructs informative degraded subject summary from `context.metadata` — extracts `blast_radius`, `root_causes[0].service/type`, `severity`, `incident_id`; role-specific format: triage → `"DEGRADED: SEV-N — service type, K services in blast radius"`; investigation → `"DEGRADED: Manual investigation required — root cause from correlation: service (type)"`; communication → `"DEGRADED: Draft status update required for {incident_id}"`; remediation → `"DEGRADED: Manual remediation required — see correlation verdict for recommended actions"`
 - `_parse_json`: strips markdown fences and preamble before parsing; handles `{...}` extraction from noisy model output via brace-depth matching
 - `_build_summary`: role-specific subject summary for emitted verdicts — triage: `"SEV-{sev}: {first sentence of reasoning}"` or fallback `"SEV-{sev} — {N} services in blast radius[, assigned to {team}]"`; investigation: `"Root cause ({confidence:.0%} confidence): {rc[:90]}"` or `"Hypothesis: {desc[:90]}"` or first sentence of reasoning ([:90]) or `"Agent response produced no summary — see raw output"` (with `log.warning`); communication: `"{'via ' + channel + ': ' if channel else ''}{content[:90]}"` (channel omitted if empty) or first sentence of reasoning ([:90]) or generic `"Agent response produced no summary — see raw output"` (no communication-specific context fallback); remediation: `"{action} on {target}[ (requires approval)]"` (approval suffix only when `requires_human_approval=True`; no auto-approved text; no risk suffix) or `"Proposed: {action}"` (no approval suffix on action-only branch) or first sentence of reasoning ([:90]) or context-based fallback from `metadata.root_causes`
-- `execute()` template method: calls `build_prompt` → `_call_model` → `parse_response` → `_apply_result` → `_build_summary` → `_emit_verdict(action="flag")` → `_post_execute`; on any exception emits `_degraded_verdict` instead
+- `execute()` template method: calls `build_prompt` → `_call_model` → `parse_response` → `_apply_result` → `_build_summary` → `_emit_verdict(action="flag")` → `_notify_slack(context)` → `_post_execute`; on any exception logs `agent_execute_failed` at ERROR with `exc_info=True` before emitting `_degraded_verdict`
+- `_notify_slack(context: IncidentContext) -> None`: called after each successful verdict emission; checks `SLACK_WEBHOOK_URL` env var (skips if absent); selects block_builder by agent role (triage→`build_triage_blocks`, remediation→`build_remediation_blocks`, resolution→`build_resolution_blocks`); calls `send_slack_notification(verdict, block_builder, verdict_store, trigger_verdict_ids=context.trigger_verdict_ids)`; fail-open — Slack errors never propagate to the incident pipeline
 - `_post_execute(context, result) -> IncidentContext`: hook called after successful execute cycle; no-op in AgentBase; overridden by subclasses (e.g. TriageAgent triggers autonomy reduction here)
 - `_request_autonomy_reduction`: stdlib `urllib`, 3 retries, POST to nthlayer-measure governance endpoint
 
@@ -164,6 +245,40 @@ Alert Source (nthlayer-measure quality breach / Prometheus alert / any webhook)
 - NthLayer alerting rule refinements from quality patterns
 - nthlayer-measure judgment SLO threshold revisions from historical data
 - nthlayer-correlate correlation improvements from past incident accuracy
+
+**Execution binding abstraction (implemented):**
+- Binding is at the handler level — `SafeAction.execute()` in `registry.py` is unchanged; `actions.py` wraps `WebhookDispatcher.execute()` into a handler callable when `binding` is present and not `"stub"`
+- Existing approval ratchet, cooldown, and blast radius checks are all pre-handler and remain unmodified
+- `_make_webhook_handler(binding_config)` in `actions.py` creates the async handler closure; lazily imports `WebhookDispatcher`; uses `_build_variables(target, context, kwargs)` to assemble template variable dict (`service`, `target`, `incident_id`; `severity` if `context.triage` present; any string kwargs)
+- `rollback` binding active: ArgoCD webhook, `${ARGOCD_TOKEN}` secret, retry 3x with backoff [1,2,4]s, PromQL verify after 60s
+- Validation warnings (at startup or `nthlayer validate`): action declared with no binding and not `binding: stub`; `${ENV_VAR}` not set; `{{variable}}` in `verify_after.query` not in available variable list
+
+**Slack Notifications (`notifications.py`):**
+
+`src/nthlayer_respond/notifications.py` — block builders for incident lifecycle messages and shared transport utilities.
+
+Block builders (all return `tuple[list[dict], str]` — blocks + fallback text):
+- `build_triage_blocks(verdict, context=None)` — INCIDENT OPENED; first sentence of `subject.summary`; footer with "nthlayer-respond · confidence X.XX · {id}"
+- `build_remediation_blocks(verdict, context=None)` — REMEDIATION; first sentence of summary
+- `build_approval_blocks(verdict, incident_id, context=None)` — APPROVAL REQUIRED; approve/reject action buttons; `block_id=f"approval_{incident_id}"`; button `action_id` values are `"approve"` / `"reject"`, `value` is `incident_id`
+- `build_verification_blocks(verdict, verified: bool | None)` — VERIFIED / VERIFICATION FAILED / VERIFICATION UNKNOWN; `subject.summary[:200]`
+- `build_resolution_blocks(verdict, context=None)` — INCIDENT RESOLVED; full chain text "evaluate → correlate → triage → investigate → remediate → learn"
+
+Transport utilities:
+- `find_slack_thread_ts(verdict_store, verdict_ids) -> str | None` — walks `lineage.context` one hop up; returns first `slack_thread_ts` found or `None`
+- `send_slack_notification(verdict, block_builder, verdict_store=None, trigger_verdict_ids=None, **builder_kwargs) -> None` — async helper; reads `SLACK_WEBHOOK_URL` from env; calls `find_slack_thread_ts` for threading; calls `block_builder(verdict, **kwargs)`; sends via `SlackNotifier`; if new thread started and API returns `ts`, stores `slack_thread_ts` in `verdict.metadata.custom` and calls `verdict_store.put(verdict)`
+- `resolve_slack_channel(context, env_fallback=None) -> str | None` — resolution order: (1) `spec.ownership.slack_channel` from manifest's `service_context`; (2) `SLACK_CHANNEL_ID` env var or `env_fallback` arg; (3) `None`
+
+Activation: `SLACK_WEBHOOK_URL` env var — absent = zero impact on incident pipeline (fully opt-in).
+
+**ApprovalServer (`server.py`) HTTP routes and Slack interaction flow:**
+- `POST /api/v1/incidents/{id}/approve` — `approved_by` from optional JSON body; 400 on malformed JSON (`{"error": "Invalid JSON body"}`); 404 if incident not found; 409 on wrong state; 200 with state/action/target/approved_by/execution_result/verdict_id on success
+- `POST /api/v1/incidents/{id}/reject` — `reason` required (400 if missing); `rejected_by` optional; 400 on malformed JSON; 404 if not found; 409 on wrong state
+- `GET /api/v1/incidents/{id}` — returns incident state, trigger_source, proposed_action, target, requires_human_approval, executed, severity
+- `POST /api/v1/slack/interactions` — verifies signature via `SlackWebClient.verify_signature` (returns 401 on failure, 403 if `slack_signing_secret` not configured); parses form-encoded payload; routes `action_id == "approve"` / `"reject"` to coordinator; fires `_update_slack_message` as background task
+- `_update_slack_message`: calls `SlackWebClient.update_message` to replace buttons with "✅ Approved by @user" or "❌ Rejected by @user" confirmation text
+- Per-incident `asyncio.Lock` serializes concurrent approve/reject/timeout operations
+- Approval timeout: `start_timeout(incident_id)` starts a background `asyncio.Task`; auto-rejects with reason `"Approval timed out after {N}s"` and `rejected_by="system/timeout"` if still `AWAITING_APPROVAL` after `approval_timeout_seconds`; `recover_pending_approvals()` called on server startup to resume timeouts for any pre-existing `AWAITING_APPROVAL` incidents with remaining time; incidents that expired during downtime are immediately rejected
 <!-- END AUTO-MANAGED -->
 
 <!-- AUTO-MANAGED: verdict-integration -->
@@ -196,8 +311,8 @@ All nthlayer-respond verdicts include `lineage.context = [sitrep_verdict.id, ...
 **Lineage chain:** nthlayer-correlate correlation verdicts → nthlayer-respond triage verdict → investigation verdict → remediation verdict → human override verdict. One human override at any point calibrates every component upstream via lineage traversal.
 
 **Coordinator approve/reject verdict behaviour:**
-- `approve(incident_id)`: after executing the safe action, emits a `"remediation"` verdict with `action="approve"`, `confidence=1.0`, `reasoning="Human approved {action} on {target}"`; appends to `context.verdict_chain`; state → RESOLVED. On execution failure: emits `action="escalate"`, `confidence=0.0`; state → ESCALATED.
-- `reject(incident_id, reason)`: resolves the last verdict in `context.verdict_chain` as `"overridden"` with `override={"by": "human"}`; state → ESCALATED.
+- `approve(incident_id, approved_by=None)`: executes the safe action, emits `"remediation"` verdict with `action="approve"`, `confidence=1.0`, `reasoning="{who} approved {action} on {target}"`; stores `approved_by` in `verdict.metadata.custom["approved_by"]`; state → RESOLVED. On execution failure: emits `action="escalate"`, `confidence=0.0`; state → ESCALATED.
+- `reject(incident_id, reason, rejected_by=None)`: resolves the last verdict as `"overridden"` with `override={"by": who, "reasoning": "{who} rejected {action} of {target}: {reason}"}` where `who = rejected_by or "human"`; `rejected_by` is NOT stored in `verdict.metadata.custom` — identity lives only in `override.by`; on `verdict_store.resolve` failure logs warning but still sets state → ESCALATED.
 
 **Degraded mode:** Agents still produce verdicts with `confidence: 0.0` and a note in `reasoning` when operating on stale nthlayer-correlate data or without model access.
 

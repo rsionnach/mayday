@@ -15,3 +15,9 @@ build/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Specification and planning documents (local development)
+*SPEC.md
+*PLAN.md
+*_SPEC.md
+*_PLAN.md

@@ -345,7 +345,7 @@ async def test_post_execute_runs_safe_action(agent, context):
     mock_exec = AsyncMock(return_value={"success": True, "detail": "scaled up", "timestamp": "2026-03-19T10:10:00Z"})
     agent._registry.execute = mock_exec
 
-    updated_ctx = await agent._post_execute(context, result)
+    await agent._post_execute(context, result)
 
     mock_exec.assert_called_once_with("scale_up", "payment-api", context)
     assert result.executed is True

@@ -7,7 +7,6 @@ import httpx
 import pytest
 
 from nthlayer_respond.safe_actions.webhook import (
-    ExecutionResult,
     WebhookDispatcher,
     render_binding_templates,
     resolve_secrets,

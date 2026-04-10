@@ -8,6 +8,7 @@ on escalation / human approval.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -55,11 +56,13 @@ class Coordinator:
         context_store: Any,
         verdict_store: Any,
         config: Any,
+        safe_action_registry: Any | None = None,
     ) -> None:
         self._agents = agents
         self._context_store = context_store
         self._verdict_store = verdict_store
         self._config = config
+        self._registry = safe_action_registry
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
@@ -89,12 +92,18 @@ class Coordinator:
             raise ValueError(f"Incident {incident_id!r} not found in context store")
         return await self.run(context)
 
-    async def approve(self, incident_id: str) -> IncidentContext:
+    async def approve(self, incident_id: str, approved_by: str | None = None) -> IncidentContext:
         """Execute the approved safe action for a paused incident.
 
         Requires state == AWAITING_APPROVAL.
         On success: state -> RESOLVED.
         On failure: state -> ESCALATED.
+
+        Args:
+            incident_id: Incident to approve.
+            approved_by: Identity of the approver (e.g. email). Stored in
+                verdict metadata and reasoning for auditability. Defaults to
+                "human" when not provided.
         """
         context = self._context_store.load(incident_id)
         if context is None:
@@ -113,16 +122,19 @@ class Coordinator:
         action = remediation.proposed_action
         target = remediation.target
 
-        # Access the registry from the remediation agent
-        registry = self._agents[AgentRole.REMEDIATION]._registry
+        if self._registry is None:
+            raise ValueError(
+                f"Incident {incident_id!r}: no safe action registry configured on coordinator"
+            )
+        registry = self._registry
+
+        who = approved_by or "human"
+        from nthlayer_learn import create as verdict_create
 
         try:
             exec_result = await registry.execute(action, target, context)
             remediation.executed = True
             remediation.execution_result = exec_result.get("detail", "")
-
-            # Emit confirmation verdict
-            from nthlayer_learn import create as verdict_create
 
             v = verdict_create(
                 subject={
@@ -133,9 +145,10 @@ class Coordinator:
                 judgment={
                     "action": "approve",
                     "confidence": 1.0,
-                    "reasoning": f"Human approved {action} on {target}",
+                    "reasoning": f"{who} approved {action} on {target}",
                 },
                 producer={"system": "nthlayer-respond", "instance": "coordinator"},
+                metadata={"custom": {"approved_by": approved_by}} if approved_by else None,
             )
             self._verdict_store.put(v)
             context.verdict_chain.append(v.id)
@@ -146,8 +159,6 @@ class Coordinator:
 
         except Exception as exc:  # noqa: BLE001
             logger.error("approve_execution_failed", error=str(exc))
-
-            from nthlayer_learn import create as verdict_create
 
             v = verdict_create(
                 subject={
@@ -161,6 +172,7 @@ class Coordinator:
                     "reasoning": f"Approved action failed: {exc}",
                 },
                 producer={"system": "nthlayer-respond", "instance": "coordinator"},
+                metadata={"custom": {"approved_by": approved_by}} if approved_by else None,
             )
             self._verdict_store.put(v)
             context.verdict_chain.append(v.id)
@@ -169,12 +181,21 @@ class Coordinator:
             self._context_store.save(context)
             return context
 
-    async def reject(self, incident_id: str, reason: str) -> IncidentContext:
+    async def reject(
+        self, incident_id: str, reason: str, rejected_by: str | None = None
+    ) -> IncidentContext:
         """Reject a proposed remediation action.
 
         Requires state == AWAITING_APPROVAL.
         Resolves the last remediation verdict as "overridden" and sets
         state -> ESCALATED.
+
+        Args:
+            incident_id: Incident to reject.
+            reason: Human-readable reason for rejection.
+            rejected_by: Identity of the rejector (e.g. email). Stored in
+                the override reasoning for auditability. Defaults to "human"
+                when not provided.
         """
         context = self._context_store.load(incident_id)
         if context is None:
@@ -189,6 +210,8 @@ class Coordinator:
         proposed_action = remediation.proposed_action if remediation else "unknown"
         target = remediation.target if remediation else "unknown"
 
+        who = rejected_by or "human"
+
         # Resolve the last verdict in the chain as overridden
         if context.verdict_chain:
             last_verdict_id = context.verdict_chain[-1]
@@ -197,9 +220,9 @@ class Coordinator:
                     last_verdict_id,
                     "overridden",
                     override={
-                        "by": "human",
+                        "by": who,
                         "reasoning": (
-                            f"Human rejected {proposed_action} of {target}: {reason}"
+                            f"{who} rejected {proposed_action} of {target}: {reason}"
                         ),
                     },
                 )
@@ -266,6 +289,7 @@ class Coordinator:
                     and context.remediation.requires_human_approval
                 ):
                     context.state = IncidentState.AWAITING_APPROVAL
+                    context.updated_at = datetime.now(timezone.utc).isoformat()
                     self._context_store.save(context)
                     return context
 
