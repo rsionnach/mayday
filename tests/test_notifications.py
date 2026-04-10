@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 
 from nthlayer_respond.notifications import (
     build_approval_blocks,
-    build_remediation_blocks,
 )
 
 

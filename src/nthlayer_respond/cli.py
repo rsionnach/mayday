@@ -13,9 +13,6 @@ from typing import Any
 import structlog
 import yaml
 from nthlayer_learn import MemoryStore, SQLiteVerdictStore
-
-logger = structlog.get_logger(__name__)
-
 from nthlayer_respond.agents.communication import CommunicationAgent
 from nthlayer_respond.agents.investigation import InvestigationAgent
 from nthlayer_respond.agents.remediation import RemediationAgent
@@ -26,6 +23,8 @@ from nthlayer_respond.coordinator import Coordinator
 from nthlayer_respond.safe_actions.actions import register_builtin_actions
 from nthlayer_respond.safe_actions.registry import SafeActionRegistry
 from nthlayer_respond.types import AgentRole, IncidentContext, IncidentState
+
+logger = structlog.get_logger(__name__)
 
 
 def _make_coordinator(config: RespondConfig) -> tuple[Coordinator, SQLiteContextStore]:

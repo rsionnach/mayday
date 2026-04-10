@@ -1,7 +1,6 @@
 """Tests for VerdictMetricsCollector — Prometheus metrics from verdict store."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
 
 from nthlayer_learn import MemoryStore, create as verdict_create
 

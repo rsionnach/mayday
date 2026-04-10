@@ -7,7 +7,7 @@ import hmac
 import json
 import time
 import urllib.parse
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from starlette.testclient import TestClient

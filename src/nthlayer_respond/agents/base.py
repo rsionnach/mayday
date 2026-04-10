@@ -11,12 +11,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import structlog
+from nthlayer_learn import create as verdict_create, Verdict
+from nthlayer_respond.types import AgentRole, IncidentContext
 
 log = structlog.get_logger(__name__)
-
-from nthlayer_learn import create as verdict_create, Verdict
-
-from nthlayer_respond.types import AgentRole, IncidentContext
 
 
 class AgentBase(ABC):
@@ -254,7 +252,7 @@ class AgentBase(ABC):
 
         # Genuinely empty — mark as unparseable
         log.warning("agent_summary_empty", role=role, incident=context.id)
-        return f"Agent response produced no summary — see raw output"
+        return "Agent response produced no summary — see raw output"
 
     def _degraded_verdict(self, context: IncidentContext, reason: str) -> Verdict:
         """Emit a degraded escalation verdict when the agent cannot produce a
@@ -292,7 +290,7 @@ class AgentBase(ABC):
         elif role == "communication":
             return f"DEGRADED: Draft status update required for {incident_id}"
         elif role == "remediation":
-            return f"DEGRADED: Manual remediation required — see correlation verdict for recommended actions"
+            return "DEGRADED: Manual remediation required — see correlation verdict for recommended actions"
         return f"DEGRADED: {role} — manual assessment required"
 
     # ------------------------------------------------------------------ #
@@ -429,7 +427,6 @@ class AgentBase(ABC):
             from nthlayer_respond.notifications import (
                 build_triage_blocks,
                 build_remediation_blocks,
-                build_resolution_blocks,
             )
 
             role = self.role.value

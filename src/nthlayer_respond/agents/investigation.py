@@ -6,16 +6,15 @@ import json
 from pathlib import Path
 
 from nthlayer_common.prompts import extract_confidence, load_prompt, render_user_prompt
-
 from nthlayer_respond.agents.base import AgentBase
-
-_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "investigation.yaml"
 from nthlayer_respond.types import (
     AgentRole,
     Hypothesis,
     IncidentContext,
     InvestigationResult,
 )
+
+_PROMPT_PATH = Path(__file__).parent.parent.parent.parent / "prompts" / "investigation.yaml"
 
 
 class InvestigationAgent(AgentBase):

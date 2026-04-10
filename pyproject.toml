@@ -14,8 +14,8 @@ dependencies = [
     "structlog>=24.1",
     "starlette>=0.40",
     "uvicorn>=0.30",
-    "nthlayer-common",
-    "nthlayer-learn",
+    "nthlayer-common>=0.1.4",
+    "nthlayer-learn>=0.2.0",
     "python-multipart>=0.0.22",
 ]
 
