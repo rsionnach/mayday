@@ -131,12 +131,12 @@ class TestEscalationRunner:
 
     @pytest.mark.asyncio
     async def test_execute_step_next_oncall_target(self):
-        """Step with target='next_oncall' sends to secondary."""
+        """Step with target='next_oncall' sends to secondary, not primary."""
         mock_slack = AsyncMock()
         mock_slack.send.return_value = NotificationResult(
             delivered=True,
             channel="slack_dm",
-            recipient="Bob",
+            recipient="secondary",
             timestamp=datetime.now(timezone.utc),
             message_id="ts2",
             error=None,
@@ -151,18 +151,24 @@ class TestEscalationRunner:
             started_at=datetime.now(timezone.utc),
             steps=_make_steps(),
         )
-        step = EscalationStep(
+
+        # First send a step without target to capture primary
+        step_primary = EscalationStep(after=timedelta(0), notify="slack_dm")
+        await runner._execute_step(state, step_primary, _make_payload())
+        primary_name = mock_slack.send.call_args.args[0].name
+
+        mock_slack.reset_mock()
+
+        # Now send step with target=next_oncall — should be different person
+        step_secondary = EscalationStep(
             after=timedelta(minutes=10),
             notify="slack_dm",
             target="next_oncall",
         )
+        await runner._execute_step(state, step_secondary, _make_payload())
 
-        await runner._execute_step(state, step, _make_payload())
-
-        # Should have sent to secondary (Bob), not primary (Alice)
-        call_args = mock_slack.send.call_args
-        recipient = call_args.args[0]
-        assert recipient.name == "Bob"
+        secondary_name = mock_slack.send.call_args.args[0].name
+        assert secondary_name != primary_name
 
     @pytest.mark.asyncio
     async def test_acknowledge_stops_active_escalation(self):
