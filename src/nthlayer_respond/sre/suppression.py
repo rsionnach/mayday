@@ -54,6 +54,10 @@ def create_suppression(
     If the metric exceeds this during the suppressed window,
     the suppression is overridden and the SRE is paged.
     """
+    if baseline <= 0:
+        msg = f"Baseline must be positive, got {baseline}"
+        raise ValueError(msg)
+
     now = datetime.now(timezone.utc)
     override_threshold = baseline * override_multiplier
 

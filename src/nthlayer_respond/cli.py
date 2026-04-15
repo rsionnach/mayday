@@ -130,7 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     suppress.add_argument("metric", help="Metric name")
     suppress.add_argument("--window", required=True, help="Suppression window (e.g. 02:00-04:00)")
     suppress.add_argument("--reason", required=True, help="Reason for suppression")
-    suppress.add_argument("--baseline", type=float, default=None, help="Baseline value (auto-computed if omitted)")
+    suppress.add_argument("--baseline", type=float, required=True, help="Baseline metric value for override threshold computation")
     suppress.add_argument("--multiplier", type=float, default=3.0, help="Override threshold multiplier (default: 3.0)")
 
     # post-incident
@@ -141,8 +141,8 @@ def build_parser() -> argparse.ArgumentParser:
     # delegate
     delegate = sub.add_parser("delegate", help="Delegate incident to autonomous handling")
     delegate.add_argument("incident_id", help="Incident ID")
-    delegate.add_argument("--safe-actions-only", action="store_true", default=True, help="Restrict to pre-approved safe actions (default)")
-    delegate.add_argument("--max-duration", default="2h", help="Max autonomous duration (default: 2h)")
+    delegate.add_argument("--safe-actions-only", action=argparse.BooleanOptionalAction, default=True, help="Restrict to pre-approved safe actions (default: True)")
+    delegate.add_argument("--max-duration", default="2h", help="Max autonomous duration as Nh or Nm (default: 2h). Parsed to timedelta by handler.")
     delegate.add_argument("--delegated-by", default=None, help="Identity of delegator")
 
     return parser

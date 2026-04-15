@@ -39,11 +39,13 @@ class TestCLIParserSRECommands:
             "latency_p99",
             "--window", "02:00-04:00",
             "--reason", "nightly backup",
+            "--baseline", "350.0",
         ])
         assert args.command == "suppress"
         assert args.service == "payment-api"
         assert args.metric == "latency_p99"
         assert args.reason == "nightly backup"
+        assert args.baseline == 350.0
 
     def test_post_incident_command_exists(self):
         parser = build_parser()
@@ -63,6 +65,12 @@ class TestCLIParserSRECommands:
         args = parser.parse_args(["delegate", "INC-001"])
         assert args.safe_actions_only is True  # default
         assert args.max_duration == "2h"  # default
+
+    def test_delegate_no_safe_actions(self):
+        """Can disable safe-actions-only via --no-safe-actions-only."""
+        parser = build_parser()
+        args = parser.parse_args(["delegate", "INC-001", "--no-safe-actions-only"])
+        assert args.safe_actions_only is False
 
     def test_existing_commands_still_work(self):
         """Verify adding new commands doesn't break existing ones."""
