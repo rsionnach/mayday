@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 _DEFAULT_MAX_DURATION = timedelta(hours=2)
 
 # Only these event types break through delegation silence
-_NOTIFY_EVENTS = {"resolution", "escalation"}
+_NOTIFY_EVENTS = frozenset({"resolution", "escalation"})
 
 
 class DelegationStatus(Enum):
@@ -93,6 +93,9 @@ def should_notify_delegator(delegation: Delegation, event_type: str) -> bool:
     """Determine if the delegator should be notified for this event.
 
     Only resolution and escalation events break through the delegation
-    silence. All other updates (status, investigation, etc.) are suppressed.
+    silence while the delegation is active. Inactive delegations
+    (resolved, expired, escalated) do not filter notifications.
     """
+    if delegation.status != DelegationStatus.ACTIVE:
+        return True  # No longer delegated — all events pass through
     return event_type in _NOTIFY_EVENTS
