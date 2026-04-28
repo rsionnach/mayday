@@ -533,6 +533,29 @@ def _serve_command(config_path: str, host: str | None = None, port: int | None =
 
 
 def main() -> None:
+    """Deprecated entry point — emits migration message and exits 1."""
+    import sys
+
+    sys.stderr.write(
+        "nthlayer-respond is deprecated as of v1.0.0 (2026-04-28).\n"
+        "\n"
+        "Functionality moved to nthlayer-workers (RespondModule) as part of "
+        "the v1.5 tiered architecture consolidation.\n"
+        "\n"
+        "Some operator-interactive commands (brief, post-incident, suppress,\n"
+        "shift-report, oncall, delegate) will move to nthlayer-bench in a\n"
+        "later release; see the migration document.\n"
+        "\n"
+        "Migration:\n"
+        "  pip uninstall nthlayer-respond\n"
+        "  pip install nthlayer-workers\n"
+        "\n"
+        "See https://github.com/rsionnach/nthlayer-respond for details.\n"
+    )
+    sys.exit(1)
+
+
+def _legacy_main_kept_for_reference() -> None:
     """CLI entry point."""
     parser = build_parser()
     args = parser.parse_args()
